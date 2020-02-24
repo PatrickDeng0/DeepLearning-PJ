@@ -102,7 +102,7 @@ class OrderBook:
             direct = 1
             self.buy_trade_update(trade_price, trade_size)
         else:
-            print('Wired trade!')
+            print('Weird trade!')
         self.update_bp()
         return direct
 
