@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 
-## Global Variables
-quote_name = {'TIME_M': 0, 'BID': 1, 'BIDSIZ': 2, 'ASK': 3, 'ASKSIZ': 4}
-trade_name = {'TIME_M': 0, 'SIZE': 1, 'PRICE': 2}
+# Global Variables
+Q_TIME, Q_BID, Q_BIDSIZ, Q_ASK, Q_ASKSIZ = 0, 1, 2, 3, 4
+T_TIME, T_SIZE, T_PRICE = 0, 1, 2
 
 
 def t_s(time):
@@ -28,17 +28,17 @@ class OrderBook:
 
     # Update OB due to quote
     def each_quote(self, quote):
-        self.time = quote[quote_name['TIME_M']]
+        self.time = quote[Q_TIME]
         ## Update bids
-        self.bids[quote[quote_name['BID']]] = quote[quote_name['BIDSIZ']]
+        self.bids[quote[Q_BID]] = quote[Q_BIDSIZ]
         for price in self.bid_prices:
-            if price > quote[quote_name['BID']]:
+            if price > quote[Q_BID]:
                 del self.bids[price]
 
         # Update asks
-        self.asks[quote[quote_name['ASK']]] = quote[quote_name['ASKSIZ']]
+        self.asks[quote[Q_ASK]] = quote[Q_ASKSIZ]
         for price in self.ask_prices:
-            if price < quote[quote_name['ASK']]:
+            if price < quote[Q_ASK]:
                 del self.asks[price]
 
         # Update best_price
@@ -88,13 +88,13 @@ class OrderBook:
 
     # Update OB due to trade
     def each_trade(self, trade):
-        self.time = trade[trade_name['TIME_M']]
+        self.time = trade[T_TIME]
 
         # Get the direction of this trade, and update the orderbook
         # direct = -1: "Sell" limit order, 1: "buy" limit order (According to Lobster)
         direct = None
-        trade_price = trade[trade_name['PRICE']]
-        trade_size = trade[trade_name['SIZE']]
+        trade_price = trade[T_PRICE]
+        trade_size = trade[T_SIZE]
         if len(self.ask_prices) > 0 and trade_price >= self.ask_prices[0]:
             direct = -1
             self.sell_trade_update(trade_price, trade_size)
@@ -102,7 +102,7 @@ class OrderBook:
             direct = 1
             self.buy_trade_update(trade_price, trade_size)
         else:
-            print('Weird trade!')
+            print('Trade at mid price:', trade)
         self.update_bp()
         return direct
 
@@ -121,15 +121,12 @@ class OrderBook:
         return res
 
 
-
 def preProcessData(Quote_dir, Trade_dir):
     current = dt.datetime.now()
     print('Begin Read')
     df_quote = pd.read_csv(Quote_dir)
     df_trade = pd.read_csv(Trade_dir)
 
-    quote_name = {'TIME_M': 0, 'BID': 1, 'BIDSIZ': 2, 'ASK': 3, 'ASKSIZ': 4}
-    trade_name = {'TIME_M': 0, 'SIZE': 1, 'PRICE': 2}
     df_quote = df_quote[['TIME_M', 'BID', 'BIDSIZ', 'ASK', 'ASKSIZ']].values
     df_trade = df_trade[['TIME_M', 'SIZE', 'PRICE']].values
     print('Finish Read', (dt.datetime.now() - current).total_seconds())
@@ -138,8 +135,8 @@ def preProcessData(Quote_dir, Trade_dir):
     print('Begin Time Process')
     ## Timestamp processing
     vt_s = np.vectorize(t_s)
-    df_quote[:, quote_name['TIME_M']] = vt_s(df_quote[:, quote_name['TIME_M']])
-    df_trade[:, trade_name['TIME_M']] = vt_s(df_trade[:, trade_name['TIME_M']])
+    df_quote[:, Q_TIME] = vt_s(df_quote[:, Q_TIME])
+    df_trade[:, T_TIME] = vt_s(df_trade[:, T_TIME])
 
     ## Given start and end time, cut the trade and quote data
     def time_selection(data):
@@ -175,3 +172,8 @@ def preProcessData(Quote_dir, Trade_dir):
             trade_index += 1
         print(orderbook.show_orderbook())
     return orderbook
+
+
+if __name__ == '__main__':
+    # testing
+    preProcessData('quote_intc_110816.csv', 'trade_intc_110816.csv')
