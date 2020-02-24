@@ -163,13 +163,27 @@ def preProcessData(Quote_dir, Trade_dir):
 
     trade_index = 0
     quote_index = 0
-    while trade_index != (n_trade - 1) and quote_index != (n_quote - 1):
+
+    # For loop:
+    # Keep compare the time of quote and trade
+
+    # End cases:
+    # 1. If the last quote happens while trade not ends, then after processing this quote, we need let trade_index + 1
+    # 2. Samely after last trade, let quote_index += 1
+    # 3. Until quote_index = n_quote or trade_index = n_trade, the loop end
+    while trade_index < n_trade and quote_index < n_quote:
         if judge_quote(trade_index, quote_index):
             orderbook.each_quote(df_quote[quote_index])
-            quote_index += 1
+            if quote_index == n_quote - 1:
+                trade_index += 1
+            else:
+                quote_index += 1
         else:
             orderbook.each_trade(df_trade[trade_index])
-            trade_index += 1
+            if trade_index == n_trade - 1:
+                quote_index += 1
+            else:
+                trade_index += 1
         print(orderbook.show_orderbook())
     return orderbook
 
