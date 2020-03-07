@@ -228,8 +228,7 @@ def convert_to_dataset(filename, window_size):
 
     # Y: -1 for downwards, 1 for upwards
     mid_prices = epochs_data[:, -2:, -1]
-    Y = np.diff(mid_prices).squeeze()
-    Y = (Y > 0)*2 - 1
+    Y = np.diff(mid_prices).squeeze() > 0
     return X, Y
 
 
