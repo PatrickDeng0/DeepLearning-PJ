@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 import datetime as dt
+import tensorflow as tf
+import tensorflow_datasets as tfds
 
 # Global Variables
 Q_TIME, Q_BID, Q_BIDSIZ, Q_ASK, Q_ASKSIZ = 0, 1, 2, 3, 4
@@ -20,11 +22,22 @@ class OrderBook:
         self.bid_prices = []
         self.ask_prices = []
         self.time = 0
+        self.history = np.zeros(2+4*self.depth)
 
     # Update best bid and ask price, for convenience in comparison
-    def update_bp(self):
+    # And Update the history of this order book, finally output to a csv
+    def update(self):
         self.ask_prices = sorted(list(self.asks.keys()))
         self.bid_prices = sorted(list(self.bids.keys()), reverse=True)
+        new_line = np.append(self.show_orderbook(), self.get_mid_price())
+        self.history = np.vstack([self.history, new_line])
+
+    # Get the mid price of current order book
+    def get_mid_price(self):
+        if len(self.ask_prices) or len(self.bid_prices) == 0:
+            return 0
+        else:
+            return self.ask_prices[0] + self.bid_prices[0]
 
     # Update OB due to quote
     def each_quote(self, quote):
@@ -41,8 +54,8 @@ class OrderBook:
             if price < quote[Q_ASK]:
                 del self.asks[price]
 
-        # Update best_price
-        self.update_bp()
+        # Update best_price and history
+        self.update()
 
     # For orderbook update when the trade is sell
     def sell_trade_update(self, trade_price, trade_size):
@@ -86,7 +99,7 @@ class OrderBook:
             else:
                 break
 
-    # Update OB due to trade
+    # Update OB due to trade and history
     def each_trade(self, trade):
         self.time = trade[T_TIME]
 
@@ -102,8 +115,10 @@ class OrderBook:
             direct = 1
             self.buy_trade_update(trade_price, trade_size)
         else:
-            print('Trade at mid price:', trade)
-        self.update_bp()
+            # This trade happens at mid price, so we ignore it
+            pass
+        # Update best_price and history
+        self.update()
         return direct
 
     # Show the orderbook!
@@ -118,10 +133,22 @@ class OrderBook:
         res = [self.time]
         for i in range(self.depth):
             res.extend([ask_prices[i], self.asks.get(ask_prices[i], 0), bid_prices[i], self.bids.get(bid_prices[i], 0)])
-        return res
+        return np.array(res)
+
+    # Convert its history to a Pandas Dataframe
+    def to_DF(self):
+        df = pd.DataFrame(self.history)
+        df.set_index(0)
+        return df
+
+    # Convert its history to a csv
+    def to_csv(self, filename):
+        df = self.to_DF()
+        df.to_csv(filename)
+        print('Convert to a CSV named:', filename)
 
 
-def preProcessData(Quote_dir, Trade_dir):
+def preProcessData(Quote_dir, Trade_dir, filename):
     current = dt.datetime.now()
     print('Begin Read')
     df_quote = pd.read_csv(Quote_dir)
@@ -184,10 +211,28 @@ def preProcessData(Quote_dir, Trade_dir):
                 quote_index += 1
             else:
                 trade_index += 1
-        print(orderbook.show_orderbook())
-    return orderbook
+    orderbook.to_csv(filename)
+    return
+
+
+# Question 1:
+# What is training dataset?
+# Now we divide the dataset into separate epochs where length of epochs is the window size +1
+# Window size as data input, the last line as for judge the movement of mid price
+def convert_to_dataset(filename, window_size):
+    data = pd.read_csv(filename).values
+    num_epochs = data.shape[0] // (window_size + 1)
+    epochs_data = data[:num_epochs*(window_size+1)]
+    epochs_data = epochs_data.reshape(num_epochs, window_size+1, epochs_data.shape[1])
+    X = epochs_data[:, :-1, :]
+
+    # Y: -1 for downwards, 1 for upwards
+    mid_prices = epochs_data[:, -2:, -1]
+    Y = np.diff(mid_prices).squeeze()
+    Y = (Y > 0)*2 - 1
+    return X, Y
 
 
 if __name__ == '__main__':
     # testing
-    preProcessData('quote_intc_110816.csv', 'trade_intc_110816.csv')
+    preProcessData('quote_intc_110816.csv', 'trade_intc_110816.csv', 'INTC_110816.csv')
