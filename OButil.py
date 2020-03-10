@@ -1,8 +1,7 @@
 import pandas as pd
 import numpy as np
 import datetime as dt
-import tensorflow as tf
-import tensorflow_datasets as tfds
+
 
 # Global Variables
 Q_TIME, Q_BID, Q_BIDSIZ, Q_ASK, Q_ASKSIZ = 0, 1, 2, 3, 4
@@ -34,10 +33,10 @@ class OrderBook:
 
     # Get the mid price of current order book
     def get_mid_price(self):
-        if len(self.ask_prices) or len(self.bid_prices) == 0:
+        if len(self.ask_prices) == 0 or len(self.bid_prices) == 0:
             return 0
         else:
-            return self.ask_prices[0] + self.bid_prices[0]
+            return (self.ask_prices[0] + self.bid_prices[0]) / 2
 
     # Update OB due to quote
     def each_quote(self, quote):
@@ -234,4 +233,5 @@ def convert_to_dataset(filename, window_size):
 
 if __name__ == '__main__':
     # testing
-    preProcessData('quote_intc_110816.csv', 'trade_intc_110816.csv', 'INTC_110816.csv')
+    data_dir = '../Data/'
+    preProcessData(data_dir+'Quote_t.csv', data_dir+'Trade_t.csv', data_dir+'orderbook.csv')
