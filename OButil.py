@@ -219,7 +219,7 @@ def preProcessData(Quote_dir, Trade_dir, filename):
 # Now we divide the dataset into separate epochs where length of epochs is the window size +1
 # Window size as data input, the last line as for judge the movement of mid price
 def convert_to_dataset(filename, window_size):
-    data = pd.read_csv(filename).values
+    data = pd.read_csv(filename).values[1:,2:]
     num_epochs = data.shape[0] // (window_size + 1)
     epochs_data = data[:num_epochs*(window_size+1)]
     epochs_data = epochs_data.reshape(num_epochs, window_size+1, epochs_data.shape[1])
@@ -235,3 +235,4 @@ if __name__ == '__main__':
     # testing
     data_dir = '../Data/'
     preProcessData(data_dir+'Quote_t.csv', data_dir+'Trade_t.csv', data_dir+'orderbook.csv')
+    X, Y = convert_to_dataset(data_dir+'orderbook.csv', 10)
