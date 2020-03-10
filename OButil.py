@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import datetime as dt
+import csv
 
 
 # Global Variables
@@ -21,15 +22,12 @@ class OrderBook:
         self.bid_prices = []
         self.ask_prices = []
         self.time = 0
-        self.history = np.zeros(2+4*self.depth)
 
     # Update best bid and ask price, for convenience in comparison
     # And Update the history of this order book, finally output to a csv
     def update(self):
         self.ask_prices = sorted(list(self.asks.keys()))
         self.bid_prices = sorted(list(self.bids.keys()), reverse=True)
-        new_line = np.append(self.show_orderbook(), self.get_mid_price())
-        self.history = np.vstack([self.history, new_line])
 
     # Get the mid price of current order book
     def get_mid_price(self):
@@ -53,7 +51,7 @@ class OrderBook:
             if price < quote[Q_ASK]:
                 del self.asks[price]
 
-        # Update best_price and history
+        # Update best_price
         self.update()
 
     # For orderbook update when the trade is sell
@@ -98,7 +96,7 @@ class OrderBook:
             else:
                 break
 
-    # Update OB due to trade and history
+    # Update OB due to trade
     def each_trade(self, trade):
         self.time = trade[T_TIME]
 
@@ -133,18 +131,6 @@ class OrderBook:
         for i in range(self.depth):
             res.extend([ask_prices[i], self.asks.get(ask_prices[i], 0), bid_prices[i], self.bids.get(bid_prices[i], 0)])
         return np.array(res)
-
-    # Convert its history to a Pandas Dataframe
-    def to_DF(self):
-        df = pd.DataFrame(self.history)
-        df.set_index(0)
-        return df
-
-    # Convert its history to a csv
-    def to_csv(self, filename):
-        df = self.to_DF()
-        df.to_csv(filename)
-        print('Convert to a CSV named:', filename)
 
 
 def preProcessData(Quote_dir, Trade_dir, filename):
@@ -199,23 +185,25 @@ def preProcessData(Quote_dir, Trade_dir, filename):
     # 1. If the last quote happens while trade not ends, then after processing this quote, we need let trade_index + 1
     # 2. Samely after last trade, let quote_index += 1
     # 3. Until quote_index = n_quote or trade_index = n_trade, the loop end
-    while trade_index < n_trade and quote_index < n_quote:
-        if (trade_index + quote_index) % percent_lines == 0:
-            print((trade_index + quote_index)*100/total_lines, '% of total', total_lines,'lines, time:', dt.datetime.now())
-        if judge_quote(trade_index, quote_index):
-            orderbook.each_quote(df_quote[quote_index])
-            if quote_index == n_quote - 1:
-                trade_index += 1
+    with open(filename, 'w', newline='') as file:
+        recorder = csv.writer(file, delimiter=',')
+        while trade_index < n_trade and quote_index < n_quote:
+            if (trade_index + quote_index) % percent_lines == 0:
+                print((trade_index + quote_index)*100/total_lines, '% of total', total_lines,'lines, time:', dt.datetime.now())
+            if judge_quote(trade_index, quote_index):
+                orderbook.each_quote(df_quote[quote_index])
+                if quote_index == n_quote - 1:
+                    trade_index += 1
+                else:
+                    quote_index += 1
             else:
-                quote_index += 1
-        else:
-            orderbook.each_trade(df_trade[trade_index])
-            if trade_index == n_trade - 1:
-                quote_index += 1
-            else:
-                trade_index += 1
-    orderbook.to_csv(filename)
-    return
+                orderbook.each_trade(df_trade[trade_index])
+                recorder.writerow(orderbook.show_orderbook())
+                if trade_index == n_trade - 1:
+                    quote_index += 1
+                else:
+                    trade_index += 1
+        return
 
 
 # Question 1:
