@@ -122,14 +122,14 @@ class OrderBook:
     def show_orderbook(self):
         def cut_depth(prices):
             while len(prices) < self.depth:
-                prices.append(0)
+                prices.append(np.nan)
             return prices
 
         ask_prices = cut_depth(self.ask_prices.copy())
         bid_prices = cut_depth(self.bid_prices.copy())
-        res = [self.time]
+        res = []
         for i in range(self.depth):
-            res.extend([ask_prices[i], self.asks.get(ask_prices[i], 0), bid_prices[i], self.bids.get(bid_prices[i], 0)])
+            res.extend([ask_prices[i], self.asks.get(ask_prices[i], np.nan), bid_prices[i], self.bids.get(bid_prices[i], np.nan)])
         return np.array(res)
 
 
@@ -175,8 +175,6 @@ def preProcessData(Quote_dir, Trade_dir, filename):
 
     trade_index = 0
     quote_index = 0
-    total_lines = n_quote + n_trade
-    percent_lines = total_lines // 100
 
     # For loop:
     # Keep compare the time of quote and trade
@@ -188,8 +186,6 @@ def preProcessData(Quote_dir, Trade_dir, filename):
     with open(filename, 'w', newline='') as file:
         recorder = csv.writer(file, delimiter=',')
         while trade_index < n_trade and quote_index < n_quote:
-            if (trade_index + quote_index) % percent_lines == 0:
-                print((trade_index + quote_index)*100/total_lines, '% of total', total_lines,'lines, time:', dt.datetime.now())
             if judge_quote(trade_index, quote_index):
                 orderbook.each_quote(df_quote[quote_index])
                 if quote_index == n_quote - 1:
@@ -211,15 +207,15 @@ def preProcessData(Quote_dir, Trade_dir, filename):
 # Now we divide the dataset into separate epochs where length of epochs is the window size +1
 # Window size as data input, the last line as for judge the movement of mid price
 def convert_to_dataset(filename, window_size):
-    data = pd.read_csv(filename).values[1:,2:]
+    data = pd.read_csv(filename, header=None).values
     num_epochs = data.shape[0] // (window_size + 1)
     epochs_data = data[:num_epochs*(window_size+1)]
     epochs_data = epochs_data.reshape(num_epochs, window_size+1, epochs_data.shape[1])
     X = epochs_data[:, :-1, :]
 
     # Y: 0 for downwards, 1 for upwards
-    mid_prices = epochs_data[:, -2:, -1]
-    Y = (np.diff(mid_prices).squeeze() > 0) + 0
+    mid_prices = np.mean(epochs_data[:, -2:, :3:2], axis=2)
+    Y = np.diff(mid_prices, axis=1).squeeze()
     return X, Y
 
 
@@ -227,4 +223,4 @@ if __name__ == '__main__':
     # testing
     data_dir = '../Data/'
     preProcessData(data_dir+'quote_intc_110816.csv', data_dir+'trade_intc_110816.csv', data_dir+'orderbook.csv')
-    X, Y = convert_to_dataset(data_dir+'orderbook.csv', 10)
+    X, Y = convert_to_dataset(data_dir+'orderbook.csv', window_size=10)
