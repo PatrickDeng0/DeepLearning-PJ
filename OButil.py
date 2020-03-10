@@ -189,6 +189,8 @@ def preProcessData(Quote_dir, Trade_dir, filename):
 
     trade_index = 0
     quote_index = 0
+    total_lines = n_quote + n_trade
+    percent_lines = total_lines // 100
 
     # For loop:
     # Keep compare the time of quote and trade
@@ -198,6 +200,8 @@ def preProcessData(Quote_dir, Trade_dir, filename):
     # 2. Samely after last trade, let quote_index += 1
     # 3. Until quote_index = n_quote or trade_index = n_trade, the loop end
     while trade_index < n_trade and quote_index < n_quote:
+        if (trade_index + quote_index) % percent_lines == 0:
+            print((trade_index + quote_index)*100/total_lines, '% of total', total_lines,'lines, time:', dt.datetime.now())
         if judge_quote(trade_index, quote_index):
             orderbook.each_quote(df_quote[quote_index])
             if quote_index == n_quote - 1:
@@ -234,5 +238,5 @@ def convert_to_dataset(filename, window_size):
 if __name__ == '__main__':
     # testing
     data_dir = '../Data/'
-    preProcessData(data_dir+'Quote_t.csv', data_dir+'Trade_t.csv', data_dir+'orderbook.csv')
+    preProcessData(data_dir+'quote_intc_110816.csv', data_dir+'trade_intc_110816.csv', data_dir+'orderbook.csv')
     X, Y = convert_to_dataset(data_dir+'orderbook.csv', 10)
