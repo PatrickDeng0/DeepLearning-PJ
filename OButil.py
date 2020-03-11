@@ -40,13 +40,13 @@ class OrderBook:
     def each_quote(self, quote):
         self.time = quote[Q_TIME]
         ## Update bids
-        self.bids[quote[Q_BID]] = quote[Q_BIDSIZ]
+        self.bids[quote[Q_BID]] = quote[Q_BIDSIZ] * 100
         for price in self.bid_prices:
             if price > quote[Q_BID]:
                 del self.bids[price]
 
         # Update asks
-        self.asks[quote[Q_ASK]] = quote[Q_ASKSIZ]
+        self.asks[quote[Q_ASK]] = quote[Q_ASKSIZ] * 100
         for price in self.ask_prices:
             if price < quote[Q_ASK]:
                 del self.asks[price]
@@ -145,17 +145,22 @@ def preProcessData(Quote_dir, Trade_dir, filename):
 
     current = dt.datetime.now()
     print('Begin Time Process')
-    ## Timestamp processing
+    # Timestamp processing
     vt_s = np.vectorize(t_s)
     df_quote[:, Q_TIME] = vt_s(df_quote[:, Q_TIME])
     df_trade[:, T_TIME] = vt_s(df_trade[:, T_TIME])
 
-    ## Given start and end time, cut the trade and quote data
+    # # Given start and end time, cut the trade and quote data
+    # def time_selection(data):
+    #     start_time = t_s("09:30:00")
+    #     end_time = t_s("16:00:00")
+    #     time_line = data[:, 0]
+    #     return data[(time_line > start_time) & (time_line <= end_time)]
+
     def time_selection(data):
-        start_time = t_s("09:30:00")
         end_time = t_s("16:00:00")
         time_line = data[:, 0]
-        return data[(time_line > start_time) & (time_line <= end_time)]
+        return data[time_line <= end_time]
 
     df_quote = time_selection(df_quote)
     df_trade = time_selection(df_trade)
@@ -193,8 +198,10 @@ def preProcessData(Quote_dir, Trade_dir, filename):
                 else:
                     quote_index += 1
             else:
-                orderbook.each_trade(df_trade[trade_index])
-                recorder.writerow(orderbook.show_orderbook())
+                now_trade = df_trade[trade_index]
+                orderbook.each_trade(now_trade)
+                if now_trade[0] > 34200:
+                    recorder.writerow(orderbook.show_orderbook())
                 if trade_index == n_trade - 1:
                     quote_index += 1
                 else:
@@ -222,5 +229,5 @@ def convert_to_dataset(filename, window_size):
 if __name__ == '__main__':
     # testing
     data_dir = '../Data/'
-    preProcessData(data_dir+'quote_intc_110816.csv', data_dir+'trade_intc_110816.csv', data_dir+'orderbook.csv')
+    preProcessData(data_dir+'INTC_quote_20120621.csv', data_dir+'INTC_trade_20120621.csv', data_dir+'orderbook.csv')
     X, Y = convert_to_dataset(data_dir+'orderbook.csv', window_size=10)
