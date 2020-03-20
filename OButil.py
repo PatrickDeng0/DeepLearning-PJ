@@ -173,10 +173,18 @@ def preProcessData(Quote_dir, Trade_dir, filename):
 
     # Judge the data is quote or trade
     def judge_quote(trade_index, quote_index):
+        # Boundary Condition: When trade_index == n_trade - 1 or quote_index == n_quote - 1
+        # 1. If the last quote happens while trade not ends, then after processing this quote, we need let trade_index + 1
+        # 2. Samely after last trade, let quote_index += 1
+        if trade_index == n_trade - 1:
+            return trade_index, quote_index + 1, True
+        elif quote_index == n_quote - 1:
+            return trade_index + 1, quote_index, False
+
         if df_trade[trade_index][0] > df_quote[quote_index][0]:
-            return True
+            return trade_index, quote_index + 1, True
         else:
-            return False
+            return trade_index + 1, quote_index, False
 
     trade_index = 0
     quote_index = 0
@@ -184,29 +192,23 @@ def preProcessData(Quote_dir, Trade_dir, filename):
     # For loop:
     # Keep compare the time of quote and trade
 
-    # End cases:
-    # 1. If the last quote happens while trade not ends, then after processing this quote, we need let trade_index + 1
-    # 2. Samely after last trade, let quote_index += 1
-    # 3. Until quote_index = n_quote or trade_index = n_trade, the loop end
+    # End cases: Until quote_index = n_quote and trade_index = n_trade, the loop end
     with open(filename, 'w', newline='') as file:
         recorder = csv.writer(file, delimiter=',')
         while trade_index < n_trade and quote_index < n_quote:
-            if judge_quote(trade_index, quote_index):
-                orderbook.each_quote(df_quote[quote_index])
-                if quote_index == n_quote - 1:
-                    trade_index += 1
-                else:
-                    quote_index += 1
+            new_trade_index, new_quote_index, judge = judge_quote(trade_index, quote_index)
+            if judge:
+                now_quote = df_quote[quote_index]
+                orderbook.each_quote(now_quote)
+                # if 34200 < now_quote[0] < 57600:
+                #     recorder.writerow(orderbook.show_orderbook())
             else:
                 now_trade = df_trade[trade_index]
                 orderbook.each_trade(now_trade)
-                if now_trade[0] > 34200:
+                if 34200 < now_trade[0] < 57600:
                     recorder.writerow(orderbook.show_orderbook())
-                if trade_index == n_trade - 1:
-                    quote_index += 1
-                else:
-                    trade_index += 1
-        return
+            trade_index, quote_index = new_trade_index, new_quote_index
+    return
 
 
 # Question 1:
