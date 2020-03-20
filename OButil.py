@@ -131,7 +131,7 @@ class OrderBook:
         return np.array(res)
 
 
-def preprocess_data(quote_dir, trade_dir, filename):
+def preprocess_data(quote_dir, trade_dir, order_book_filename, transaction_filename):
     current = dt.datetime.now()
     df_quote = pd.read_csv(quote_dir)
     df_trade = pd.read_csv(trade_dir)
@@ -163,17 +163,23 @@ def preprocess_data(quote_dir, trade_dir, filename):
 
     trade_index = 0
     quote_index = 0
+    transactions = []
+
+    def add_transactions(trade_idx, direction):
+        trade = df_trade[trade_idx]
+        transactions.append([trade[T_PRICE], trade[T_SIZE], direction])
 
     def handle_trade(trade_idx, rec):
         current_trade = df_trade[trade_idx]
-        order_book.handle_trade(current_trade)
+        _direction = order_book.handle_trade(current_trade)
+        add_transactions(trade_idx, _direction)
         if 34200 < current_trade[0] < 57600:
             rec.writerow(order_book.show_order_book())
 
     def handle_quote(quote_idx):
         order_book.handle_quote(df_quote[quote_idx])
 
-    with open(filename, 'w', newline='') as file:
+    with open(order_book_filename, 'w', newline='') as file:
         recorder = csv.writer(file, delimiter=',')
         while trade_index < n_trade and quote_index < n_quote:
             if is_quote_next(trade_index, quote_index):
@@ -188,6 +194,8 @@ def preprocess_data(quote_dir, trade_dir, filename):
         while quote_index < n_quote:
             handle_quote(quote_index)
             quote_index += 1
+
+    pd.DataFrame(transactions).to_csv(transaction_filename, header=False, index=False)
 
     print('Time lapse:', (dt.datetime.now() - current).total_seconds())
 
