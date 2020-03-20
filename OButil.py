@@ -130,6 +130,13 @@ class OrderBook:
                         self.bids.get(bid_prices[i], np.nan)])
         return np.array(res)
 
+    def show_header(self):
+        header = []
+        for i in range(self.depth):
+            header += ["ask_px{}".format(i + 1), "ask_sz{}".format(i + 1), "bid_px{}".format(i + 1),
+                       "bid_sz{}".format(i + 1)]
+        return np.array(header)
+
 
 def preprocess_data(quote_dir, trade_dir, order_book_filename, transaction_filename):
     current = dt.datetime.now()
@@ -172,15 +179,16 @@ def preprocess_data(quote_dir, trade_dir, order_book_filename, transaction_filen
     def handle_trade(trade_idx, rec):
         current_trade = df_trade[trade_idx]
         _direction = order_book.handle_trade(current_trade)
-        add_transactions(trade_idx, _direction)
         if 34200 < current_trade[0] < 57600:
             rec.writerow(order_book.show_order_book())
+            add_transactions(trade_idx, _direction)
 
     def handle_quote(quote_idx):
         order_book.handle_quote(df_quote[quote_idx])
 
     with open(order_book_filename, 'w', newline='') as file:
         recorder = csv.writer(file, delimiter=',')
+        recorder.writerow(order_book.show_header())
         while trade_index < n_trade and quote_index < n_quote:
             if is_quote_next(trade_index, quote_index):
                 handle_quote(quote_index)
@@ -195,7 +203,7 @@ def preprocess_data(quote_dir, trade_dir, order_book_filename, transaction_filen
             handle_quote(quote_index)
             quote_index += 1
 
-    pd.DataFrame(transactions).to_csv(transaction_filename, header=False, index=False)
+    pd.DataFrame(transactions).to_csv(transaction_filename, header=['tx_price', 'tx_size', 'tx_direction'], index=False)
 
     print('Time lapse:', (dt.datetime.now() - current).total_seconds())
 
