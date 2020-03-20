@@ -133,17 +133,12 @@ class OrderBook:
 
 def preprocess_data(quote_dir, trade_dir, filename):
     current = dt.datetime.now()
-    print('Begin Read')
     df_quote = pd.read_csv(quote_dir)
     df_trade = pd.read_csv(trade_dir)
 
     df_quote = df_quote[['TIME_M', 'BID', 'BIDSIZ', 'ASK', 'ASKSIZ']].values
     df_trade = df_trade[['TIME_M', 'SIZE', 'PRICE']].values
-    print('Finish Read', (dt.datetime.now() - current).total_seconds())
 
-    current = dt.datetime.now()
-    print('Begin Time Process')
-    # Timestamp processing
     vt_s = np.vectorize(t_s)
     df_quote[:, Q_TIME] = vt_s(df_quote[:, Q_TIME])
     df_trade[:, T_TIME] = vt_s(df_trade[:, T_TIME])
@@ -157,15 +152,14 @@ def preprocess_data(quote_dir, trade_dir, filename):
     df_trade = time_selection(df_trade)
     n_trade = len(df_trade)
     n_quote = len(df_quote)
-    print('Finish Time process', (dt.datetime.now() - current).total_seconds())
 
     order_book = OrderBook(depth=5)
 
     def is_quote_next(trade_idx, quote_idx):
         if df_trade[trade_idx][0] > df_quote[quote_idx][0]:
-            return trade_idx, quote_idx + 1, True
+            return True
         else:
-            return trade_idx + 1, quote_idx, False
+            return False
 
     trade_index = 0
     quote_index = 0
@@ -194,6 +188,9 @@ def preprocess_data(quote_dir, trade_dir, filename):
         while quote_index < n_quote:
             handle_quote(quote_index)
             quote_index += 1
+
+    print('Time lapse:', (dt.datetime.now() - current).total_seconds())
+
     return
 
 
