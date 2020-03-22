@@ -1,5 +1,5 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 """
 All feature functions assume the same number of rows in order book and trades
@@ -8,8 +8,9 @@ Order book columns: ask_px1, ask_sz1, bid_px1, bid_sz1, ask_px2, ask_sz2, bid_px
 Transactions columns: price, size, direction (-1 for sell, 1 for buy, na for mid price transactions)
 """
 
-# Column indices
-TRANS_PX, TRANS_SZ, TRANS_DIR = 0, 1, 2
+
+def mid(order_book_df):
+    return (order_book_df['ask_px1'] + order_book_df['bid_px1']) / 2
 
 
 def order_flow(order_book_df, transaction_df, lag=50):
@@ -37,7 +38,7 @@ def order_flow(order_book_df, transaction_df, lag=50):
     flow['order_flow_buy'] = flow['buy_vol'].rolling(lag).sum() / flow['ask_sz1']
     flow['order_flow_sell'] = flow['sell_vol'].rolling(lag).sum() / flow['bid_sz1']
 
-    mid_price = (order_book_df['ask_px1'] + order_book_df['bid_px1']) / 2
+    mid_price = mid(order_book_df)
     flow['actual_spread'] = order_book_df['ask_px1'] - order_book_df['bid_px1']
     flow['relative_spread'] = (flow['actual_spread'] / mid_price) * 1000
 
@@ -47,15 +48,15 @@ def order_flow(order_book_df, transaction_df, lag=50):
     return flow.drop(columns=['ask_sz1', 'bid_sz1', 'tx_size', 'tx_direction', 'buy_vol', 'sell_vol'])
 
 
-def liquidity_imbalance(order_book_df, depth):
+def liquidity_imbalance(order_book_df):
     """
     liquidity imbalance at level i = ask_vol_i / (ask_vol_i + bid_vol_i)
     This feature is constructed according to the ppt.
     """
     liq_imb = {}
-    for i in range(depth):
-        a, b = order_book_df['ask_sz{}'.format(i + 1)], order_book_df['bid_sz{}'.format(i + 1)]
-        liq_imb['liq_imb_{}'.format(i + 1)] = a / (a + b)
+    for i in range(1, int(1 + order_book_df.shape[1] / 4)):
+        a, b = order_book_df['ask_sz{}'.format(i)], order_book_df['bid_sz{}'.format(i)]
+        liq_imb['liq_imb_{}'.format(i)] = a / (a + b)
 
     return pd.DataFrame(liq_imb)
 
@@ -71,9 +72,9 @@ def relative_mid_trend(order_book_df):
     nom = (order_book_df['ask_px1'] / order_book_df['ask_sz1'] + order_book_df['bid_px1'] / order_book_df['bid_sz1'])
     den = (1 / order_book_df['ask_sz1'] + 1 / order_book_df['bid_sz1'])
     mid_price_inv_vol_weighted = nom / den
-    mid_price = (order_book_df['ask_px1'] + order_book_df['bid_px1']) / 2
+    mid_price = mid(order_book_df)
 
-    return mid_price_inv_vol_weighted / mid_price
+    return pd.DataFrame({'rel_mid_trend': mid_price_inv_vol_weighted / mid_price})
 
 
 def volatility(order_book_df, lag=50):
@@ -81,357 +82,192 @@ def volatility(order_book_df, lag=50):
     The volatility is the standard deviation of the last n mid prices returns then divided by 100
     This feature is derived from paper: Angelo Ranaldo..._Order aggressiveness in limit order book markets...P4
     """
-    mid_price = (order_book_df['ask_px1'] + order_book_df['bid_px1']) / 2
+    mid_price = mid(order_book_df)
     mid_price_return = mid_price.shift(-1) - mid_price
     volatility_look_ahead = (mid_price_return.rolling(lag).std()) / 100
-    return volatility_look_ahead.shift(1)
+    return pd.DataFrame({'vol': volatility_look_ahead.shift(1)})
 
-#
-# def aggressiveness(order_book_df, transaction_df, lag=50):
-#     """
-#     bid(ask) limit order aggressiveness = the ratio of bid(ask) limit orders submitted at no lower(higher) than
-#                                                        the best bid(ask) prices in the prior n observations
-#                                                     to total bid(ask) limit orders submitted in prior 50 observations
-#     This feature is derived from book: Irene Aldridge_High-frequency trading...(2013) P186
-#     Intuition: The higher the ratio, the more aggressive is the trader in his bid(ask) to capture the best
-#                available price and the more likely the trader is to believe that the price is about to
-#                move away from the mid price.
-#     """
-#     df = pd.concat([order_book_df[['ask_sz1', 'bid_sz1']], transaction_df[['tx_size', 'tx_direction']]], axis=1)
-#
-#
-#     is_aggr_sell = (df['tx_direction'] == -1 & df['tx_price'] <= df['ask_px1'].shift(1))
-#
-#     df['is_aggr_sell'] = is_aggr_sell
-#     df['aggr_sell_size'] = 0
-#     df.loc[df['is_aggr_sell'], 'aggr_sell_size'] = df['tx_size']
-#
-#     df['sell_tx_size'] = 0
-#     df.loc[df['tx_direction'] == -1, 'sell_tx_size'] = df['tx_size']
-#
-#     agr_sell_ratios = df['aggr_sell_size'].rolling(50).sum() / df['sell_tx_size'].rolling(50).sum()
-#
-#     # bid limit order aggressiveness
-#     if_bid_sbmt_agr_mid1 = (df['type_direction'] == 1)
-#     if_bid_sbmt_agr_mid2 = (df['price'] >= df['bid_price_1'].shift(1))
-#     if_bid_sbmt_agr = (if_bid_sbmt_agr_mid1 & if_bid_sbmt_agr_mid2)
-#
-#     df['if_bid_sbmt_agr'] = if_bid_sbmt_agr
-#     if_bid_sbmt_agr_index = df[df['if_bid_sbmt_agr'] == True].index
-#     df['bid_vol_sbmt_agr'] = 0
-#     df.loc[if_bid_sbmt_agr_index, 'bid_vol_sbmt_agr'] = df['size']
-#
-#     if_bid_sbmt_index = df[df['type_direction'] == 1].index
-#     df['bid_vol_sbmt'] = 0
-#     df.loc[if_bid_sbmt_index, 'bid_vol_sbmt'] = df['size']
-#
-#     df['lo_agr_bid'] = df['bid_vol_sbmt_agr'].rolling(50, min_periods=1).sum() / df[
-#         'bid_vol_sbmt'].rolling(50, min_periods=1).sum()
-#
-#     # df['lo_agr_bid'].fillna(method='ffill', inplace=True)
-#     all_features['lo_agr_bid'] = df['lo_agr_bid']
-#
-#
-# def features_new(orderbook_file, message_file):
-#     messages = pd.read_csv(message_file, header=None)
-#     limit_order_book = pd.read_csv(orderbook_file, header=None)
-#
-#     messages.columns = ['time', 'type', 'order ID', 'size', 'price', 'direction']
-#     limit_order_book.columns = ['{}_{}_{}'.format(s, t, l) for l in range(1, 6) for s in ['ask', 'bid'] for t in
-#                                 ['price', 'vol']]
-#
-#     all_features = pd.concat([messages.time, limit_order_book], axis=1)
-#     total_data = pd.concat([messages, limit_order_book], axis=1)
-#     total_data['mid_price'] = (total_data.loc[:, 'ask_price_1'] + total_data.loc[:, 'bid_price_1']) / 2
-#
-#     price_movement = np.sign(total_data['mid_price'].shift(-1) - total_data['mid_price'])
-#     total_data['mid_price_mov'] = np.zeros(len(total_data))
-#     total_data['mid_price_mov'][0:len(total_data) - 1] = price_movement[0:len(total_data) - 1]  # the last one is nan
-#     total_data['mid_price_mov'][len(total_data) - 1] = 0
-#     total_data['label'] = total_data['mid_price_mov']
-#
-#     # -- new feature 10: effective spread
-#     '''
-#     The effective spread is computed as difference between the latest trade price and midprice
-#                                         divided by midprice, then times 1000.
-#     This feature is derived from book: Irene Aldridge_High-frequency trading...(2013) P191
-#     Intuition: The effective spread measures how far, in percentage terms, the latest realized price
-#                fell away from the simple mid price.
-#     '''
-#     if_lastest_trade_index = total_data[total_data['type'] == 4].index
-#     if_not_lastest_trade_index = total_data[total_data['type'] != 4].index
-#     total_data['lastest_trade_price'] = 0
-#     total_data.loc[if_lastest_trade_index, 'lastest_trade_price'] = total_data['price']
-#     total_data.loc[if_not_lastest_trade_index, 'lastest_trade_price'] = np.nan
-#     total_data['lastest_trade_price'].fillna(method='ffill', inplace=True)
-#
-#     total_data['effective_spread'] = (total_data['lastest_trade_price'] / total_data['mid_price'] - 1) * 1000
-#
-#     # total_data['effective_spread'].fillna(method='ffill', inplace=True)
-#     all_features['effective_spread'] = total_data['effective_spread']
-#
-#     # -- new feature 11: ILLIQ
-#     """
-#     The illiquidity is computed as the ratio of absolute stock return to its dollar volume.
-#
-#     This feature is derived from Amihud (2002)
-#
-#     """
-#
-#     total_data['mid_price_ret'] = np.log(total_data['mid_price']) - np.log(total_data['mid_price'].shift(1))
-#     total_data['ret_over_volume'] = abs(total_data['mid_price_ret']) / (
-#             total_data['ask_vol_1'] + total_data['bid_vol_1'])
-#     total_data['ILLIQ'] = total_data['ret_over_volume'].rolling(50, min_periods=1).sum()
-#
-#     all_features['ILLIQ'] = total_data['ILLIQ']
-#
-#     # -- new feature 12: relative volume
-#     """
-#     Relative volume is computed as the ratio of current volume to the historical average volume
-#     """
-#
-#     for i in range(1, 6):
-#         total_data['rel_ask_vol_' + str(i)] = total_data['ask_vol_' + str(i)] / total_data['ask_vol_' + str(i)].rolling(
-#             50, min_periods=1).mean()
-#         total_data['rel_bid_vol_' + str(i)] = total_data['bid_vol_' + str(i)] / total_data['bid_vol_' + str(i)].rolling(
-#             50, min_periods=1).mean()
-#
-#         all_features['rel_bid_vol_' + str(i)] = total_data['rel_bid_vol_' + str(i)]
-#         all_features['rel_ask_vol_' + str(i)] = total_data['rel_ask_vol_' + str(i)]
-#
-#     # -- new feature 13: volume depth
-#
-#     """
-#     Volume depth is computed as the ratio of best volume to the sum of all depth volume
-#     """
-#     total_data['depth_ask_vol'] = total_data['ask_vol_1'] / (
-#             total_data['ask_vol_1'] + total_data['ask_vol_2'] + total_data['ask_vol_3'] + total_data['ask_vol_4'] +
-#             total_data['ask_vol_5'])
-#     total_data['depth_bid_vol'] = total_data['bid_vol_1'] / (
-#             total_data['bid_vol_1'] + total_data['bid_vol_2'] + total_data['bid_vol_3'] + total_data['bid_vol_4'] +
-#             total_data['bid_vol_5'])
-#
-#     all_features['depth_ask_vol'] = total_data['depth_ask_vol']
-#     all_features['depth_bid_vol'] = total_data['depth_bid_vol']
-#
-#     # -- new feature 14: volume rank
-#     """
-#     volume rank is computed as the rank of current volume with respect to the previous 50days volume
-#     """
-#
-#     rollrank = lambda x: (x.argsort().argsort()[-1] + 1.0) / len(x)
-#
-#     for i in range(1, 6):
-#         total_data['rank_ask_vol_' + str(i)] = total_data['ask_vol_' + str(i)].rolling(50, min_periods=1).apply(
-#             rollrank)
-#         total_data['rank_bid_vol_' + str(i)] = total_data['bid_vol_' + str(i)].rolling(50, min_periods=1).apply(
-#             rollrank)
-#
-#         total_data['rank_ask_vol_' + str(i)] = total_data['rank_ask_vol_' + str(i)].fillna(method='ffill', axis=0)
-#         total_data['rank_bid_vol_' + str(i)] = total_data['rank_bid_vol_' + str(i)].fillna(method='ffill', axis=0)
-#         total_data['rank_ask_vol_' + str(i)] = np.clip(total_data['rank_ask_vol_' + str(i)], 0, 1)
-#         total_data['rank_bid_vol_' + str(i)] = np.clip(total_data['rank_bid_vol_' + str(i)], 0, 1)
-#
-#         all_features['rank_bid_vol_' + str(i)] = total_data['rank_bid_vol_' + str(i)]
-#         all_features['rank_ask_vol_' + str(i)] = total_data['rank_ask_vol_' + str(i)]
-#
-#     # -- new feature 15: ask bid volume correlation
-#     """
-#     ask bid volume correlation is comupted as 50 days time series correlation between ask and bid volume for each level
-#     """
-#
-#     for i in range(1, 6):
-#         total_data['corr_vol_' + str(i)] = total_data['ask_vol_' + str(i)].rolling(50, min_periods=1).corr(
-#             total_data['bid_vol_' + str(i)])
-#
-#         total_data['corr_vol_' + str(i)] = total_data['corr_vol_' + str(i)].fillna(method='ffill', axis=0)
-#         total_data['corr_vol_' + str(i)] = np.clip(total_data['corr_vol_' + str(i)], -1, 1)
-#
-#         all_features['corr_vol_' + str(i)] = total_data['corr_vol_' + str(i)]
-#
-#     ##ADD technical indicators
-#     total_data['ma7'] = total_data['mid_price'].rolling(7, min_periods=1).mean()
-#     total_data['ma21'] = total_data['mid_price'].rolling(21, min_periods=1).mean()
-#     all_features['ma7'] = total_data['ma7']
-#     all_features['ma21'] = total_data['ma21']
-#
-#     # Create DMA
-#     total_data['DMA'] = total_data['mid_price'].rolling(10, min_periods=1).mean() - total_data['mid_price'].rolling(50,
-#                                                                                                                     min_periods=1).mean()
-#     total_data['AMA'] = total_data['DMA'].rolling(10, min_periods=1).mean()
-#     all_features['DMA'] = total_data['DMA']
-#     all_features['AMA'] = total_data['AMA']
-#
-#     """
-#            #Create DPO
-#     offset = int(20/2+1)
-#     total_data['DPO'] = total_data['mid_price'][offset:]-total_data['mid_price'].rolling(20,min_periods = 1).mean()[:len(total_data)-offset]
-#     all_features['DPO'] = total_data['DPO']
-#     """
-#
-#     # Create EMA
-#     K = 2 / (20 + 1)
-#     total_data['EMA'] = np.zeros(len(total_data))
-#     for i in range(len(total_data)):
-#         if i == 0:
-#             total_data['EMA'][i] = total_data['mid_price'][i]
-#         else:
-#             total_data['EMA'][i] = total_data['mid_price'][i] * K + total_data['EMA'][i - 1] * (1 - K)
-#     all_features['EMA'] = total_data['EMA']
-#
-#     """
-#             #Create ENV
-#     Length=14
-#     Width=0.06
-#     ENV=np.zeros(len(total_data))
-#     MiddleLine=total_data['mid_price'].rolling(Length, min_periods = 1).mean()
-#     UpperLine=MiddleLine*(1+Width)
-#     LowerLine=MiddleLine*(1-Width)
-#
-#     for i in range(len(total_data)):
-#         if total_data['mid_price'][i]>UpperLine[i]:
-#             ENV[i]=1
-#         elif total_data['mid_price'][i]<LowerLine[i]:
-#             ENV[i]=-1
-#     total_data['ENV'] = ENV
-#     all_features['ENV'] = total_data['ENV']
-#     """
-#
-#     # Create PSY
-#     length = 12
-#     PSYValue = np.full(len(total_data), 50.0)  # the PSY value for first 12 day is set to be 50
-#     for i in range(length, len(total_data)):
-#         PSYValue[i] = sum(np.array(total_data['mid_price'][i - length + 1:i + 1]) > np.array(
-#             total_data['mid_price'][i - length:i])) / length * 100
-#     total_data['PSY'] = PSYValue
-#     all_features['PSY'] = total_data['PSY']
-#
-#     # Create ROC
-#     ROCValue = np.zeros(len(total_data['mid_price']))  # the PVI value for 12 day is set to be 0
-#     ROCValue[length:len(total_data['mid_price'])] = (np.array(
-#         total_data['mid_price'][length:len(total_data['mid_price'])]) - np.array(
-#         total_data['mid_price'][0:len(total_data['mid_price']) - length])) / np.array(
-#         total_data['mid_price'][0:len(total_data['mid_price']) - length]) * 100
-#     total_data['ROC'] = ROCValue
-#     all_features['ROC'] = total_data['ROC']
-#
-#     # Create RSI
-#     length = 14
-#     RSIValue = np.zeros(len(total_data['mid_price']))
-#     DiffofPrice = np.zeros(len(total_data['mid_price']))
-#     DiffofPrice[1:len(total_data['mid_price'])] = np.array(
-#         total_data['mid_price'][1:len(total_data['mid_price'])]) - np.array(
-#         total_data['mid_price'][0:len(total_data['mid_price']) - 1])
-#     RSIValue[0:length] = 50  # the RSI value for first 14 days is set to be 50
-#     for i in range(length, len(total_data)):
-#         temp = DiffofPrice[i - length:i]
-#         RSIValue[i] = sum(temp[temp > 0]) / sum(abs(temp)) * 100  # one way of calculation
-#     total_data['RSI'] = RSIValue
-#     all_features['RSI'] = total_data['RSI']
-#
-#     # Create BIAS
-#     Length = 6
-#     BIASValue = np.zeros(len(total_data))
-#     BIASValue = (total_data['mid_price'] - total_data['mid_price'].rolling(Length, min_periods=1).mean()) / total_data[
-#         'mid_price'].rolling(Length, min_periods=1).mean() * 100
-#     total_data['BIAS'] = BIASValue
-#     all_features['BIAS'] = total_data['BIAS']
-#
-#     # Create CMO
-#     Length = 14
-#     Price = total_data['mid_price']
-#     len1 = len(Price)
-#     CMOValue = np.zeros(len1)
-#     DiffofPrice = np.zeros(len1)
-#     DiffofPrice[1:] = np.diff(Price)
-#     for i in range(Length, len1):
-#         Temp = DiffofPrice[i - Length + 1:i]
-#         CMOValue[i] = (np.sum(Temp[Temp > 0]) - np.sum(np.abs(Temp[Temp < 0]))) / np.sum(np.abs(Temp)) * 100
-#     total_data['CMO'] = CMOValue
-#     all_features['CMO'] = total_data['CMO']
-#
-#     # Create BOLL
-#     Length = 20
-#     Width = 2
-#     Price = total_data['mid_price']
-#     len1 = len(total_data)
-#     MiddleLine = np.zeros(len1)
-#     UpperLine = np.zeros(len1)
-#     LowerLine = np.zeros(len1)
-#
-#     MiddleLine = total_data['mid_price'].rolling(Length, min_periods=1).mean()
-#     UpperLine[:Length - 1] = MiddleLine[:Length - 1]
-#     LowerLine[:Length - 1] = MiddleLine[:Length - 1]
-#     for i in range(Length - 1, len1):
-#         UpperLine[i] = MiddleLine[i] + Width * np.std(Price[i - Length + 1:i])
-#         LowerLine[i] = MiddleLine[i] - Width * np.std(Price[i - Length + 1:i])
-#
-#     total_data['Upper_line'] = UpperLine
-#     total_data['Lower_line'] = LowerLine
-#     all_features['Upper_line'] = total_data['Upper_line']
-#     all_features['Lower_line'] = total_data['Lower_line']
-#
-#     """
-#             # Create MACD
-#     Length=26
-#     Width=0.06
-#     ENV=np.zeros(len(total_data));
-#     MiddleLine=total_data['mid_price'].rolling(Length, min_periods = 1).mean()
-#     UpperLine=MiddleLine*(1+Width)
-#     LowerLine=MiddleLine*(1-Width)
-#
-#     for i in range(len(total_data)):
-#         if total_data['mid_price'][i]>UpperLine[i]:
-#             ENV[i]=1
-#         elif total_data['mid_price'][i]<LowerLine[i]:
-#             ENV[i]=-1
-#     total_data['26ema'] = ENV
-#
-#     Length=12
-#     Width=0.06
-#     ENV=np.zeros(len(total_data));
-#     MiddleLine=total_data['mid_price'].rolling(Length, min_periods = 1).mean()
-#     UpperLine=MiddleLine*(1+Width)
-#     LowerLine=MiddleLine*(1-Width)
-#     for i in range(len(total_data)):
-#         if total_data['mid_price'][i]>UpperLine[i]:
-#             ENV[i]=1
-#         elif total_data['mid_price'][i]<LowerLine[i]:
-#             ENV[i]=-1
-#     total_data['12ema'] = ENV
-#             #total_data['26ema'] = pd.ewm(total_data['mid_price'], span=26)
-#             #total_data['12ema'] = pd.ewm(total_data['mid_price'], span=12)
-#             #total_data['26ema'] = pd.DataFrame(total_data['mid_price']).ewm(span=26)
-#             #total_data['12ema'] = pd.DataFrame(total_data['mid_price']).ewm(span=12)
-#     total_data['MACD'] = (total_data['12ema']-total_data['26ema'])
-#
-#             # Create Bollinger Bands
-#             #total_data['20sd'] = pd.stats.moments.rolling_std(total_data['mid_price'],20)
-#             #total_data['upper_band'] = total_data['ma21'] + (total_data['20sd']*2)
-#             #total_data['lower_band'] = total_data['ma21'] - (total_data['20sd']*2)
-#
-#             # Create Momentum
-#
-#
-#
-#     all_features['26ema'] = total_data['26ema']
-#     all_features['12ema'] = total_data['12ema']
-#     all_features['MACD'] = total_data['MACD']
-#     """
-#     # self._all_features['20sd'] = total_data['20sd']
-#     # self._all_features['upper_band'] = total_data['upper_band']
-#     # self._all_features['lower_band'] = total_data['lower_band']
-#     total_data['momentum'] = total_data['mid_price'] - 1
-#     all_features['momentum'] = total_data['momentum']
-#     ###ADD fourier transform
-#     close_fft = np.fft.fft(np.asarray(total_data['mid_price'].tolist()))
-#     fft_df = pd.DataFrame({'fft': close_fft})
-#     all_features['absolute'] = fft_df['fft'].apply(lambda x: np.abs(x))
-#     all_features['angle'] = fft_df['fft'].apply(lambda x: np.angle(x))
-#
-#     # --
-#     all_features['label'] = total_data['label']
-#     all_features = all_features.dropna()
-#
-#     all_features['label'] = all_features['label'].astype(int)
-#     return all_features
+
+def aggressiveness(order_book_df, transaction_df, lag=50):
+    """
+    bid(ask) limit order aggressiveness = the ratio of bid(ask) limit orders submitted at no lower(higher) than
+                                                       the best bid(ask) prices in the prior n observations
+                                                    to total bid(ask) limit orders submitted in prior 50 observations
+    This feature is derived from book: Irene Aldridge_High-frequency trading...(2013) P186
+    Intuition: The higher the ratio, the more aggressive is the trader in his bid(ask) to capture the best
+               available price and the more likely the trader is to believe that the price is about to
+               move away from the mid price.
+    """
+    df = pd.concat([order_book_df[['ask_px1', 'bid_px1']], transaction_df], axis=1)
+
+    is_aggr_sell = (df['tx_direction'] == -1) & (df['tx_price'] <= df['ask_px1'].shift(1))
+    df['aggr_sell_size'] = 0
+    df.loc[is_aggr_sell, 'aggr_sell_size'] = df['tx_size']
+    df['sell_tx_size'] = 0
+    df.loc[df['tx_direction'] == -1, 'sell_tx_size'] = df['tx_size']
+    aggr_sell_ratios = df['aggr_sell_size'].rolling(lag).sum() / df['sell_tx_size'].rolling(lag).sum()
+
+    is_aggr_buy = (df['tx_direction'] == 1) & (df['tx_price'] >= df['bid_px1'].shift(1))
+    df['aggr_buy_size'] = 0
+    df.loc[is_aggr_buy, 'aggr_buy_size'] = df['tx_size']
+    df['buy_tx_size'] = 0
+    df.loc[df['tx_direction'] == -1, 'buy_tx_size'] = df['tx_size']
+    aggr_buy_ratios = df['aggr_buy_size'].rolling(lag).sum() / df['buy_tx_size'].rolling(lag).sum()
+
+    return pd.DataFrame({'aggr_b_ratios': aggr_buy_ratios, 'aggr_sell_ratios': aggr_sell_ratios})
+
+
+def effective_spread(order_book_df, transaction_df):
+    """
+    The effective spread is computed as difference between the latest trade price and mid price
+                                        divided by mid price, then times 1000.
+    This feature is derived from book: Irene Aldridge_High-frequency trading...(2013) P191
+    Intuition: The effective spread measures how far, in percentage terms, the latest realized price
+               fell away from the simple mid price.
+    """
+    mid_price = mid(order_book_df)
+    return pd.DataFrame({'eff_spread': (transaction_df['tx_price'] / mid_price - 1) * 1000})
+
+
+def illiquidity(order_book_df, lag=50):
+    """
+    The illiquidity is computed as the ratio of absolute stock return to its dollar volume.
+    This feature is derived from Amihud (2002)
+    """
+    mid_price = mid(order_book_df)
+    mid_price_ret = np.log(mid_price) - np.log(mid_price.shift(1))
+    ret_over_volume = abs(mid_price_ret) / (order_book_df['ask_sz1'] + order_book_df['bid_sz1'])
+    return pd.DataFrame({'illiquidity': ret_over_volume.rolling(lag).sum()})
+
+
+def relative_vol(order_book_df, lag=50):
+    """
+    Relative volume is computed as the ratio of current volume to the historical average volume
+    """
+    rel_vol = {}
+    for i in range(1, int(1 + order_book_df.shape[1] / 4)):
+        rel_ask_sz = order_book_df['ask_sz{}'.format(i)] / order_book_df['ask_sz{}'.format(i)].rolling(lag).mean()
+        rel_vol['rel_ask_sz{}'.format(i)] = rel_ask_sz
+        rel_bid_sz = order_book_df['bid_sz{}'.format(i)] / order_book_df['bid_sz{}'.format(i)].rolling(lag).mean()
+        rel_vol['rel_bid_sz{}'.format(i)] = rel_bid_sz
+
+    return pd.DataFrame(rel_vol)
+
+
+def volume_depth(order_book_df):
+    """
+    Volume depth is computed as the ratio of best volume to the sum of all depth volume
+    """
+    total_ask, total_bid = None, None
+    vol_depth = {}
+    for i in range(1, int(1 + order_book_df.shape[1] / 4)):
+        total_ask = order_book_df['ask_sz{}'.format(i)]
+        total_bid = order_book_df['bid_sz{}'.format(i)]
+    vol_depth['ask_vol_depth'] = order_book_df['ask_sz1'] / total_ask
+    vol_depth['bid_vol_depth'] = order_book_df['bid_sz1'] / total_bid
+    return pd.DataFrame(vol_depth)
+
+
+def volume_rank(order_book_df, lag=50):
+    """
+    volume rank is computed as the rank of current volume with respect to the previous n days volume
+    """
+
+    def roll_rank(x):
+        return (x.argsort().argsort()[-1] + 1.0) / len(x)
+
+    vol_rank = {}
+    for i in range(1, int(1 + order_book_df.shape[1] / 4)):
+        rank_ask_vol = order_book_df['ask_sz{}'.format(i)].rolling(lag).apply(roll_rank, raw=True)
+        rank_bid_vol = order_book_df['bid_sz{}'.format(i)].rolling(lag).apply(roll_rank, raw=True)
+
+        rank_ask_vol = rank_ask_vol.fillna(method='ffill', axis=0)
+        rank_bid_vol = rank_bid_vol.fillna(method='ffill', axis=0)
+        rank_ask_vol = np.clip(rank_ask_vol, 0, 1)
+        rank_bid_vol = np.clip(rank_bid_vol, 0, 1)
+
+        vol_rank['rank_bid_sz{}'.format(i)] = rank_bid_vol
+        vol_rank['rank_ask_sz{}'.format(i)] = rank_ask_vol
+
+    return pd.DataFrame(vol_rank)
+
+
+def ask_bid_correlation(order_book_df, lag=50):
+    """
+    ask bid volume correlation is computed as 50 days time series correlation between ask and bid volume for each level
+    """
+    ask_bid_corr = {}
+    for i in range(1, int(1 + order_book_df.shape[1] / 4)):
+        corr_sz = order_book_df['ask_sz{}'.format(i)].rolling(lag) \
+            .corr(order_book_df['bid_sz{}'.format(i)]).fillna(method='ffill', axis=0)
+        corr_sz = np.clip(corr_sz, -1, 1)
+        ask_bid_corr['corr_sz{}'.format(i)] = corr_sz
+
+    return pd.DataFrame(ask_bid_corr)
+
+
+def technical_indicators(mid_price):
+    tech = {}
+    n = len(mid_price)
+
+    tech['mid_ma7'] = mid_price.rolling(7).mean()
+    tech['mid_ma21'] = mid_price.rolling(21).mean()
+
+    dma = mid_price.rolling(10).mean() - mid_price.rolling(50).mean()
+    ama = dma.rolling(10).mean()
+    tech['dma'] = dma
+    tech['ama'] = ama
+
+    k = 2 / (20 + 1)
+    tech['ema'] = mid_price * k + mid_price.shift(1) * (1 - k)
+
+    length = 12
+    psy_value = np.full(n, 50.0)  # the PSY values for first {length} days are set to be 50
+    for i in range(length, n):
+        psy_value[i] = sum(np.array(mid_price[i - length + 1:i + 1]) > np.array(mid_price[i - length:i])) / length * 100
+    tech['psy'] = psy_value
+
+    roc = (mid_price - mid_price.shift(length)) / mid_price.shift(length) * 100
+    tech['roc'] = roc.fillna(0)
+
+    length = 14
+    diff = (mid_price - mid_price.shift(1)).fillna(0)
+    tech['rsi'] = diff.rolling(length) \
+        .apply(lambda x: sum(x[x > 0]) / sum(abs(x)) * 100, raw=True) \
+        .shift(1) \
+        .fillna(50)
+    tech['cmo'] = diff.rolling(length) \
+        .apply(lambda x: (sum(x[x > 0]) / sum(abs(x)) - 1) * 100, raw=True) \
+        .shift(1) \
+        .fillna(50)
+
+    length = 6
+    tech['bias'] = ((mid_price - mid_price.rolling(length).mean()) / mid_price.rolling(length).mean() * 100).fillna(0)
+
+    length = 20
+    width = 2
+    mid_line = mid_price.rolling(length).mean()
+    tech['upper_line'] = mid_line + width * mid_price.rolling(length).std().shift(1)
+    tech['lower_line'] = mid_line - width * mid_price.rolling(length).std().shift(1)
+
+    tech['fft'] = np.abs(np.fft.fft(mid_price))
+
+    return pd.DataFrame(tech)
+
+
+def all_features(order_book_df, transaction_df, lag=50):
+    features = []
+    mid_price = mid(order_book_df)
+    features.append(order_flow(order_book_df, transaction_df, lag))
+    features.append(liquidity_imbalance(order_book_df))
+    features.append(relative_mid_trend(order_book_df))
+    features.append(volatility(order_book_df, lag))
+    features.append(aggressiveness(order_book_df, transaction_df, lag))
+    features.append(effective_spread(order_book_df, transaction_df))
+    features.append(illiquidity(order_book_df, lag))
+    features.append(relative_vol(order_book_df))
+    features.append(volume_depth(order_book_df))
+    features.append(volume_rank(order_book_df))
+    features.append(ask_bid_correlation(order_book_df, lag))
+    features.append(technical_indicators(mid_price))
+    return pd.concat(features)
