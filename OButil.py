@@ -3,7 +3,6 @@ import numpy as np
 import datetime as dt
 import csv
 
-
 # Global Variables
 Q_TIME, Q_BID, Q_BIDSIZ, Q_ASK, Q_ASKSIZ = 0, 1, 2, 3, 4
 T_TIME, T_SIZE, T_PRICE = 0, 1, 2
@@ -37,9 +36,9 @@ class OrderBook:
             return (self.ask_prices[0] + self.bid_prices[0]) / 2
 
     # Update OB due to quote
-    def each_quote(self, quote):
+    def handle_quote(self, quote):
         self.time = quote[Q_TIME]
-        ## Update bids
+        # Update bids
         self.bids[quote[Q_BID]] = quote[Q_BIDSIZ] * 100
         for price in self.bid_prices:
             if price > quote[Q_BID]:
@@ -54,20 +53,20 @@ class OrderBook:
         # Update best_price
         self.update()
 
-    # For orderbook update when the trade is sell
+    # For order book update when the trade is sell
     def sell_trade_update(self, trade_price, trade_size):
-        # Sell limit order executed, now ask orderbook would change. Priority is descended by prices
-        accu_count = 0
+        # Sell limit order executed, now ask order book would change. Priority is descended by prices
+        filled_size = 0
         for price in self.ask_prices:
-            # If the price on ask orderbook is lower than the trade, then it must be eaten by the trade
+            # If the price on ask order book is lower than the trade, then it must be eaten by the trade
             # So we accumulate the total numbers of orders eaten
             if price < trade_price:
-                accu_count += self.asks[price]
+                filled_size += self.asks[price]
                 del self.asks[price]
             # Now if price is equal, we let the original amount of orders minus the accumulated orders
             elif price == trade_price:
-                if accu_count < trade_size:
-                    remain = self.asks[price] + accu_count - trade_size
+                if filled_size < trade_size:
+                    remain = self.asks[price] + filled_size - trade_size
                     if remain > 0:
                         self.asks[price] = remain
                     else:
@@ -75,20 +74,20 @@ class OrderBook:
             else:
                 break
 
-    # For orderbook update when the trade is sell
+    # For order book update when the trade is sell
     def buy_trade_update(self, trade_price, trade_size):
-        # Buy limit order executed, now bid orderbook would change. Priority is increased by prices
-        accu_count = 0
+        # Buy limit order executed, now bid order book would change. Priority is increased by prices
+        filled_size = 0
         for price in self.bid_prices:
-            # If the price on ask orderbook is higher than the trade, then it must be eaten by the trade
+            # If the price on ask order book is higher than the trade, then it must be eaten by the trade
             # So we accumulate the total numbers of orders eaten
             if price > trade_price:
-                accu_count += self.bids[price]
+                filled_size += self.bids[price]
                 del self.bids[price]
             # Now if price is equal, we let the original amount of orders minus the accumulated orders
             elif price == trade_price:
-                if accu_count < trade_size:
-                    remain = self.bids[price] + accu_count - trade_size
+                if filled_size < trade_size:
+                    remain = self.bids[price] + filled_size - trade_size
                     if remain > 0:
                         self.bids[price] = remain
                     else:
@@ -97,10 +96,10 @@ class OrderBook:
                 break
 
     # Update OB due to trade
-    def each_trade(self, trade):
+    def handle_trade(self, trade):
         self.time = trade[T_TIME]
 
-        # Get the direction of this trade, and update the orderbook
+        # Get the direction of this trade, and update the order book
         # direct = -1: "Sell" limit order, 1: "buy" limit order (According to Lobster)
         direct = None
         trade_price = trade[T_PRICE]
@@ -112,14 +111,12 @@ class OrderBook:
             direct = 1
             self.buy_trade_update(trade_price, trade_size)
         else:
-            # This trade happens at mid price, so we ignore it
             pass
         # Update best_price and history
         self.update()
         return direct
 
-    # Show the orderbook!
-    def show_orderbook(self):
+    def show_order_book(self):
         def cut_depth(prices):
             while len(prices) < self.depth:
                 prices.append(np.nan)
@@ -129,33 +126,29 @@ class OrderBook:
         bid_prices = cut_depth(self.bid_prices.copy())
         res = []
         for i in range(self.depth):
-            res.extend([ask_prices[i], self.asks.get(ask_prices[i], np.nan), bid_prices[i], self.bids.get(bid_prices[i], np.nan)])
+            res.extend([ask_prices[i], self.asks.get(ask_prices[i], np.nan), bid_prices[i],
+                        self.bids.get(bid_prices[i], np.nan)])
         return np.array(res)
 
+    def show_header(self):
+        header = []
+        for i in range(self.depth):
+            header += ["ask_px{}".format(i + 1), "ask_sz{}".format(i + 1), "bid_px{}".format(i + 1),
+                       "bid_sz{}".format(i + 1)]
+        return np.array(header)
 
-def preProcessData(Quote_dir, Trade_dir, filename):
+
+def preprocess_data(quote_dir, trade_dir, order_book_filename, transaction_filename):
     current = dt.datetime.now()
-    print('Begin Read')
-    df_quote = pd.read_csv(Quote_dir)
-    df_trade = pd.read_csv(Trade_dir)
+    df_quote = pd.read_csv(quote_dir)
+    df_trade = pd.read_csv(trade_dir)
 
     df_quote = df_quote[['TIME_M', 'BID', 'BIDSIZ', 'ASK', 'ASKSIZ']].values
     df_trade = df_trade[['TIME_M', 'SIZE', 'PRICE']].values
-    print('Finish Read', (dt.datetime.now() - current).total_seconds())
 
-    current = dt.datetime.now()
-    print('Begin Time Process')
-    # Timestamp processing
     vt_s = np.vectorize(t_s)
     df_quote[:, Q_TIME] = vt_s(df_quote[:, Q_TIME])
     df_trade[:, T_TIME] = vt_s(df_trade[:, T_TIME])
-
-    # # Given start and end time, cut the trade and quote data
-    # def time_selection(data):
-    #     start_time = t_s("09:30:00")
-    #     end_time = t_s("16:00:00")
-    #     time_line = data[:, 0]
-    #     return data[(time_line > start_time) & (time_line <= end_time)]
 
     def time_selection(data):
         end_time = t_s("16:00:00")
@@ -166,47 +159,55 @@ def preProcessData(Quote_dir, Trade_dir, filename):
     df_trade = time_selection(df_trade)
     n_trade = len(df_trade)
     n_quote = len(df_quote)
-    print('Finish Time process', (dt.datetime.now() - current).total_seconds())
 
-    # Quote and trade, order book, message initialize
-    orderbook = OrderBook(depth=5)
+    order_book = OrderBook(depth=5)
 
-    # Judge the data is quote or trade
-    def judge_quote(trade_index, quote_index):
-        if df_trade[trade_index][0] > df_quote[quote_index][0]:
+    def is_quote_next(trade_idx, quote_idx):
+        if df_trade[trade_idx][0] > df_quote[quote_idx][0]:
             return True
         else:
             return False
 
     trade_index = 0
     quote_index = 0
+    transactions = []
 
-    # For loop:
-    # Keep compare the time of quote and trade
+    def add_transactions(trade_idx, direction):
+        trade = df_trade[trade_idx]
+        transactions.append([trade[T_PRICE], trade[T_SIZE], direction])
 
-    # End cases:
-    # 1. If the last quote happens while trade not ends, then after processing this quote, we need let trade_index + 1
-    # 2. Samely after last trade, let quote_index += 1
-    # 3. Until quote_index = n_quote or trade_index = n_trade, the loop end
-    with open(filename, 'w', newline='') as file:
+    def handle_trade(trade_idx, rec):
+        current_trade = df_trade[trade_idx]
+        _direction = order_book.handle_trade(current_trade)
+        if 34200 < current_trade[0] < 57600:
+            rec.writerow(order_book.show_order_book())
+            add_transactions(trade_idx, _direction)
+
+    def handle_quote(quote_idx):
+        order_book.handle_quote(df_quote[quote_idx])
+
+    with open(order_book_filename, 'w', newline='') as file:
         recorder = csv.writer(file, delimiter=',')
+        recorder.writerow(order_book.show_header())
         while trade_index < n_trade and quote_index < n_quote:
-            if judge_quote(trade_index, quote_index):
-                orderbook.each_quote(df_quote[quote_index])
-                if quote_index == n_quote - 1:
-                    trade_index += 1
-                else:
-                    quote_index += 1
+            if is_quote_next(trade_index, quote_index):
+                handle_quote(quote_index)
+                quote_index += 1
             else:
-                now_trade = df_trade[trade_index]
-                orderbook.each_trade(now_trade)
-                if now_trade[0] > 34200:
-                    recorder.writerow(orderbook.show_orderbook())
-                if trade_index == n_trade - 1:
-                    quote_index += 1
-                else:
-                    trade_index += 1
-        return
+                handle_trade(trade_index, recorder)
+                trade_index += 1
+        while trade_index < n_trade:
+            handle_trade(trade_index, recorder)
+            trade_index += 1
+        while quote_index < n_quote:
+            handle_quote(quote_index)
+            quote_index += 1
+
+    pd.DataFrame(transactions).to_csv(transaction_filename, header=['tx_price', 'tx_size', 'tx_direction'], index=False)
+
+    print('Time lapse:', (dt.datetime.now() - current).total_seconds())
+
+    return
 
 
 # Question 1:
@@ -216,8 +217,8 @@ def preProcessData(Quote_dir, Trade_dir, filename):
 def convert_to_dataset(filename, window_size):
     data = pd.read_csv(filename, header=None).values
     num_epochs = data.shape[0] // (window_size + 1)
-    epochs_data = data[:num_epochs*(window_size+1)]
-    epochs_data = epochs_data.reshape(num_epochs, window_size+1, epochs_data.shape[1])
+    epochs_data = data[:num_epochs * (window_size + 1)]
+    epochs_data = epochs_data.reshape(num_epochs, window_size + 1, epochs_data.shape[1])
     X = epochs_data[:, :-1, :]
 
     # Y: 0 for downwards, 1 for upwards
@@ -229,5 +230,6 @@ def convert_to_dataset(filename, window_size):
 if __name__ == '__main__':
     # testing
     data_dir = '../Data/'
-    preProcessData(data_dir+'INTC_quote_20120621.csv', data_dir+'INTC_trade_20120621.csv', data_dir+'orderbook.csv')
-    X, Y = convert_to_dataset(data_dir+'orderbook.csv', window_size=10)
+    preprocess_data(data_dir + 'INTC_quote_20120621.csv', data_dir + 'INTC_trade_20120621.csv',
+                    data_dir + 'orderbook.csv')
+    X, Y = convert_to_dataset(data_dir + 'orderbook.csv', window_size=10)
