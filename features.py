@@ -270,4 +270,4 @@ def all_features(order_book_df, transaction_df, lag=50):
     features.append(volume_rank(order_book_df))
     features.append(ask_bid_correlation(order_book_df, lag))
     features.append(technical_indicators(mid_price))
-    return pd.concat(features)
+    return pd.concat(features, axis=1)[lag-1:].reset_index(drop=True)
