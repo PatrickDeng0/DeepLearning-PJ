@@ -8,29 +8,31 @@ Notes: in this version, we did not check the accuracy of
  - 'time_merge'
 '''
 
+
 def pred_trans(pred_test):
     pred = np.zeros(len(pred_test))
     for i in range(len(pred_test)):
-        if pred_test[i][0]>pred_test[i][1]:
+        if pred_test[i][0] > pred_test[i][1]:
             pred[i] = -1
         else:
             pred[i] = 1
     return pred
 
+
 def time_merge(df, time_track, pred_test):
     pred = pred_trans(pred_test)
     time_track['pred'] = pred
-    d = df.merge(time_track, on = 'time')
+    d = df.merge(time_track, on='time')
     return d
 
 
 class SimpleStrategy:
     def __init__(self, bid_price, ask_price, pred):
-        '''
+        """
         :param bid_price: numpy.array of best bid
         :param ask_price: numpy.array of best ask
         :param pred: numpy.array of pred, whose elements is in {1,-1}
-        '''
+        """
         self.pred = pred
         self.ask_price = ask_price
         self.bid_price = bid_price
@@ -43,12 +45,12 @@ class SimpleStrategy:
         self.ret_strat = np.zeros_like(self.ask_price)
 
     def get_ret(self, cost_rate=0.0001, method=1, cash0=100000):
-        '''
+        """
         :param cost_rate: float
         :param method: 1==all in/all out; 2==1 share
         :param cash0: initial cash
         :return: ret_strat: numpy.array with same length as bid price
-        '''
+        """
         self.cash0 = cash0
         self.cost_rate = cost_rate
         self.method = method
@@ -56,19 +58,18 @@ class SimpleStrategy:
 
         # calculate the first buying time
         ini_buy = self.pred.argmax()
-        while(self.ask_price[ini_buy]==0):
-            ini_buy += self.pred[ini_buy+1:].argmax() + 1
-            if ini_buy>len(self.ask_price):
+        while self.ask_price[ini_buy] == 0:
+            ini_buy += self.pred[ini_buy + 1:].argmax() + 1
+            if ini_buy > len(self.ask_price):
                 print("No action could be taken")
                 return self.ret_strat
-
 
         for i in range(ini_buy, len(self.bid_price)):
             # buy
             if (self.pred[i] == 1) and (self.money[i - 1] >= 0) and (self.ask_price[i] > 0):
                 if self.method == 1:
                     self.position[i] = self.position[i - 1] + self.money[i - 1] / (
-                                self.ask_price[i] * (1 + self.cost_rate))  # buy all
+                            self.ask_price[i] * (1 + self.cost_rate))  # buy all
                     self.money[i] = 0
                 else:
                     self.position[i] = self.position[i - 1] + 1  # buy one
@@ -114,10 +115,8 @@ class SimpleStrategy:
         self.ret_strat *= 0
 
 
-
 def plot(d):
-    ret_stra = SimpleStrategy(np.array(d['bid_px1']), np.array(d['ask_px1']),
-                                 np.array(d['pred']))
+    ret_stra = SimpleStrategy(np.array(d['bid_px1']), np.array(d['ask_px1']), np.array(d['pred']))
 
     fig = plt.figure(figsize=(15, 10))
     plt.plot(ret_stra.get_ret(cost_rate=0), label='No transaction cost')
@@ -131,11 +130,13 @@ def plot(d):
     plt.legend()
     plt.show()
 
+
 if __name__ == "__main__":
     '''
     tested with data in the Data\orderbook.csv
     '''
     df = pd.read_csv(r"C:\Users\Administrator\Desktop\DeepLearningProject\Data\orderbook.csv")
-    d = pd.DataFrame({"bid_px1":df["bid_px1"], "ask_px1":df["ask_px1"], "pred":np.random.choice([-1, 1], len(df["bid_px1"]))})
+    d = pd.DataFrame(
+        {"bid_px1": df["bid_px1"], "ask_px1": df["ask_px1"], "pred": np.random.choice([-1, 1], len(df["bid_px1"]))})
 
     plot(d)
