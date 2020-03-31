@@ -214,8 +214,8 @@ def preprocess_data(quote_dir, trade_dir, order_book_filename, transaction_filen
 # What is training dataset?
 # Now we divide the dataset into separate epochs where length of epochs is the window size +1
 # Window size as data input, the last line as for judge the movement of mid price
-def convert_to_dataset(filename, window_size):
-    data = pd.read_csv(filename, header=None).values
+def convert_to_dataset(order_book_df, window_size):
+    data = order_book_df.values
     num_epochs = data.shape[0] // (window_size + 1)
     epochs_data = data[:num_epochs * (window_size + 1)]
     epochs_data = epochs_data.reshape(num_epochs, window_size + 1, epochs_data.shape[1])
