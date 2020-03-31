@@ -1,6 +1,11 @@
 import os
-
+import pandas as pd
+import numpy as np
 import tensorflow as tf
+import features
+import auto_features
+import OButil as ob
+from sklearn.model_selection import train_test_split
 
 
 class RNNModel:
@@ -74,3 +79,41 @@ class RNNModel:
 
     def predict(self, x_test):
         return self._model.predict(x_test)
+
+
+if __name__ == "__main__":
+    # an example for the full flow
+    code_size = 8
+    encoder_layer_sizes = [32, 16]
+    lag = 50
+    quote_dir = './data/quote_intc_110816.csv'
+    trade_dir = './data/trade_intc_110816.csv'
+    out_order_book_filename = './data/order_book.csv'
+    out_transaction_filename = './data/transaction.csv'
+
+    ob.preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transaction_filename)
+    order_book_df = pd.read_csv(out_order_book_filename)
+    transaction_df = pd.read_csv(out_transaction_filename)
+    f = features.all_features(order_book_df, transaction_df, lag)[lag - 1:].ffill().bfill().reset_index(drop=True)
+    auto_f = auto_features.auto_features(f.to_numpy(), code_size, encoder_layer_sizes,
+                                         num_epochs=10, batch_size=4, display_step=1000)
+
+    o = order_book_df[lag - 1:].to_numpy()
+    t = transaction_df[lag - 1:].to_numpy()
+    X = np.concatenate((o, t, auto_f.numpy()), axis=1)
+    X = pd.DataFrame(X)
+
+    X, Y = ob.convert_to_dataset(X, window_size=10)
+    X, Y = ob.over_sample(X, Y)
+
+    train_X, test_X, train_Y, test_Y = train_test_split(X, Y, test_size=0.1)
+    train_X, val_X, train_Y, val_Y = train_test_split(train_X, train_Y, test_size=0.1)
+
+    rnn = RNNModel(learning_rate=0.001, n_epoch=100, batch_size=512,
+                   num_hidden=32, log_files_path=os.path.join(os.getcwd(), 'logs'),
+                   method='LSTMs', output_size=3)
+
+    rnn.train(train_X, train_Y, val_X, val_Y)
+
+    # out of sample accuracy
+    print("Out of sample accuracy:", (rnn.predict(test_X).argmax(1) == test_Y).mean())
