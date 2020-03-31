@@ -9,6 +9,12 @@ Transactions columns: price, size, direction (-1 for sell, 1 for buy, na for mid
 """
 
 
+def div(nu, de, alpha=1):
+    p = pd.Series(np.zeros_like(de))
+    p[:] = alpha
+    return nu / pd.concat([de, p], axis=1).max(axis=1)
+
+
 def mid(order_book_df):
     return (order_book_df['ask_px1'] + order_book_df['bid_px1']) / 2
 
@@ -35,15 +41,16 @@ def order_flow(order_book_df, transaction_df, lag=50):
     flow['sell_vol'] = 0
     flow.loc[flow['tx_direction'] == 1, 'buy_vol'] = flow['tx_size']
     flow.loc[flow['tx_direction'] == -1, 'sell_vol'] = flow['tx_size']
-    flow['order_flow_buy'] = flow['buy_vol'].rolling(lag).sum() / flow['ask_sz1']
-    flow['order_flow_sell'] = flow['sell_vol'].rolling(lag).sum() / flow['bid_sz1']
+    flow['order_flow_buy'] = div(flow['buy_vol'].rolling(lag).sum(), flow['ask_sz1'])
+    flow['order_flow_sell'] = div(flow['sell_vol'].rolling(lag).sum(), flow['bid_sz1'])
 
     mid_price = mid(order_book_df)
     flow['actual_spread'] = order_book_df['ask_px1'] - order_book_df['bid_px1']
     flow['relative_spread'] = (flow['actual_spread'] / mid_price) * 1000
 
-    flow['actual_mkt_imb'] = flow['buy_vol'].rolling(lag).sum() - flow['sell_vol'].rolling(lag).sum()
-    flow['relative_mkt_imb'] = flow['actual_spread'] / flow['actual_mkt_imb']
+    flow['actual_mkt_imb'] = \
+        flow['buy_vol'].rolling(lag, min_periods=1).sum() - flow['sell_vol'].rolling(lag, min_periods=1).sum()
+    flow['relative_mkt_imb'] = div(flow['actual_spread'], flow['actual_mkt_imb'])
 
     return flow.drop(columns=['ask_sz1', 'bid_sz1', 'tx_size', 'tx_direction', 'buy_vol', 'sell_vol'])
 
@@ -69,9 +76,10 @@ def relative_mid_trend(order_book_df):
     Intuition: a larger relative_mid_price_trend would more likely lead to a up-tick.
     """
 
-    nom = (order_book_df['ask_px1'] / order_book_df['ask_sz1'] + order_book_df['bid_px1'] / order_book_df['bid_sz1'])
-    den = (1 / order_book_df['ask_sz1'] + 1 / order_book_df['bid_sz1'])
-    mid_price_inv_vol_weighted = nom / den
+    nom = div(order_book_df['ask_px1'], order_book_df['ask_sz1'])
+    nom += div(order_book_df['bid_px1'], order_book_df['bid_sz1'])
+    den = div(1, order_book_df['ask_sz1']) + div(1, order_book_df['bid_sz1'])
+    mid_price_inv_vol_weighted = div(nom, den)
     mid_price = mid(order_book_df)
 
     return pd.DataFrame({'rel_mid_trend': mid_price_inv_vol_weighted / mid_price})
@@ -84,7 +92,7 @@ def volatility(order_book_df, lag=50):
     """
     mid_price = mid(order_book_df)
     mid_price_return = mid_price.shift(-1) - mid_price
-    volatility_look_ahead = (mid_price_return.rolling(lag).std()) / 100
+    volatility_look_ahead = (mid_price_return.rolling(lag, min_periods=1).std()) / 100
     return pd.DataFrame({'vol': volatility_look_ahead.shift(1)})
 
 
@@ -105,14 +113,16 @@ def aggressiveness(order_book_df, transaction_df, lag=50):
     df.loc[is_aggr_sell, 'aggr_sell_size'] = df['tx_size']
     df['sell_tx_size'] = 0
     df.loc[df['tx_direction'] == -1, 'sell_tx_size'] = df['tx_size']
-    aggr_sell_ratios = df['aggr_sell_size'].rolling(lag).sum() / df['sell_tx_size'].rolling(lag).sum()
+    aggr_sell_ratios = div(
+        df['aggr_sell_size'].rolling(lag, min_periods=1).sum(), df['sell_tx_size'].rolling(lag, min_periods=1).sum())
 
     is_aggr_buy = (df['tx_direction'] == 1) & (df['tx_price'] >= df['bid_px1'].shift(1))
     df['aggr_buy_size'] = 0
     df.loc[is_aggr_buy, 'aggr_buy_size'] = df['tx_size']
     df['buy_tx_size'] = 0
     df.loc[df['tx_direction'] == -1, 'buy_tx_size'] = df['tx_size']
-    aggr_buy_ratios = df['aggr_buy_size'].rolling(lag).sum() / df['buy_tx_size'].rolling(lag).sum()
+    aggr_buy_ratios = div(
+        df['aggr_buy_size'].rolling(lag, min_periods=1).sum(), df['buy_tx_size'].rolling(lag, min_periods=1).sum())
 
     return pd.DataFrame({'aggr_b_ratios': aggr_buy_ratios, 'aggr_sell_ratios': aggr_sell_ratios})
 
@@ -137,7 +147,7 @@ def illiquidity(order_book_df, lag=50):
     mid_price = mid(order_book_df)
     mid_price_ret = np.log(mid_price) - np.log(mid_price.shift(1))
     ret_over_volume = abs(mid_price_ret) / (order_book_df['ask_sz1'] + order_book_df['bid_sz1'])
-    return pd.DataFrame({'illiquidity': ret_over_volume.rolling(lag).sum()})
+    return pd.DataFrame({'illiquidity': ret_over_volume.rolling(lag, min_periods=1).sum()})
 
 
 def relative_vol(order_book_df, lag=50):
@@ -146,9 +156,11 @@ def relative_vol(order_book_df, lag=50):
     """
     rel_vol = {}
     for i in range(1, int(1 + order_book_df.shape[1] / 4)):
-        rel_ask_sz = order_book_df['ask_sz{}'.format(i)] / order_book_df['ask_sz{}'.format(i)].rolling(lag).mean()
+        rel_ask_sz = \
+            order_book_df['ask_sz{}'.format(i)] / order_book_df['ask_sz{}'.format(i)].rolling(lag, min_periods=1).mean()
         rel_vol['rel_ask_sz{}'.format(i)] = rel_ask_sz
-        rel_bid_sz = order_book_df['bid_sz{}'.format(i)] / order_book_df['bid_sz{}'.format(i)].rolling(lag).mean()
+        rel_bid_sz = \
+            order_book_df['bid_sz{}'.format(i)] / order_book_df['bid_sz{}'.format(i)].rolling(lag, min_periods=1).mean()
         rel_vol['rel_bid_sz{}'.format(i)] = rel_bid_sz
 
     return pd.DataFrame(rel_vol)
@@ -158,11 +170,12 @@ def volume_depth(order_book_df):
     """
     Volume depth is computed as the ratio of best volume to the sum of all depth volume
     """
-    total_ask, total_bid = None, None
+    n = len(order_book_df)
+    total_ask, total_bid = np.zeros(n), np.zeros(n)
     vol_depth = {}
     for i in range(1, int(1 + order_book_df.shape[1] / 4)):
-        total_ask = order_book_df['ask_sz{}'.format(i)]
-        total_bid = order_book_df['bid_sz{}'.format(i)]
+        total_ask += order_book_df['ask_sz{}'.format(i)]
+        total_bid += order_book_df['bid_sz{}'.format(i)]
     vol_depth['ask_vol_depth'] = order_book_df['ask_sz1'] / total_ask
     vol_depth['bid_vol_depth'] = order_book_df['bid_sz1'] / total_bid
     return pd.DataFrame(vol_depth)
@@ -178,8 +191,8 @@ def volume_rank(order_book_df, lag=50):
 
     vol_rank = {}
     for i in range(1, int(1 + order_book_df.shape[1] / 4)):
-        rank_ask_vol = order_book_df['ask_sz{}'.format(i)].rolling(lag).apply(roll_rank, raw=True)
-        rank_bid_vol = order_book_df['bid_sz{}'.format(i)].rolling(lag).apply(roll_rank, raw=True)
+        rank_ask_vol = order_book_df['ask_sz{}'.format(i)].rolling(lag, min_periods=1).apply(roll_rank, raw=True)
+        rank_bid_vol = order_book_df['bid_sz{}'.format(i)].rolling(lag, min_periods=1).apply(roll_rank, raw=True)
 
         rank_ask_vol = rank_ask_vol.fillna(method='ffill', axis=0)
         rank_bid_vol = rank_bid_vol.fillna(method='ffill', axis=0)
@@ -198,7 +211,7 @@ def ask_bid_correlation(order_book_df, lag=50):
     """
     ask_bid_corr = {}
     for i in range(1, int(1 + order_book_df.shape[1] / 4)):
-        corr_sz = order_book_df['ask_sz{}'.format(i)].rolling(lag) \
+        corr_sz = order_book_df['ask_sz{}'.format(i)].rolling(lag, min_periods=1) \
             .corr(order_book_df['bid_sz{}'.format(i)]).fillna(method='ffill', axis=0)
         corr_sz = np.clip(corr_sz, -1, 1)
         ask_bid_corr['corr_sz{}'.format(i)] = corr_sz
@@ -210,11 +223,11 @@ def technical_indicators(mid_price):
     tech = {}
     n = len(mid_price)
 
-    tech['mid_ma7'] = mid_price.rolling(7).mean()
-    tech['mid_ma21'] = mid_price.rolling(21).mean()
+    tech['mid_ma7'] = mid_price.rolling(7, min_periods=1).mean()
+    tech['mid_ma21'] = mid_price.rolling(21, min_periods=1).mean()
 
-    dma = mid_price.rolling(10).mean() - mid_price.rolling(50).mean()
-    ama = dma.rolling(10).mean()
+    dma = mid_price.rolling(10, min_periods=1).mean() - mid_price.rolling(50, min_periods=1).mean()
+    ama = dma.rolling(10, min_periods=1).mean()
     tech['dma'] = dma
     tech['ama'] = ama
 
@@ -232,23 +245,25 @@ def technical_indicators(mid_price):
 
     length = 14
     diff = (mid_price - mid_price.shift(1)).fillna(0)
-    tech['rsi'] = diff.rolling(length) \
+    tech['rsi'] = diff.rolling(length, min_periods=1) \
         .apply(lambda x: sum(x[x > 0]) / sum(abs(x)) * 100, raw=True) \
         .shift(1) \
         .fillna(50)
-    tech['cmo'] = diff.rolling(length) \
+    tech['cmo'] = diff.rolling(length, min_periods=1) \
         .apply(lambda x: (sum(x[x > 0]) / sum(abs(x)) - 1) * 100, raw=True) \
         .shift(1) \
         .fillna(50)
 
     length = 6
-    tech['bias'] = ((mid_price - mid_price.rolling(length).mean()) / mid_price.rolling(length).mean() * 100).fillna(0)
+    tech['bias'] = \
+        ((mid_price - mid_price.rolling(length, min_periods=1).mean()) /
+         mid_price.rolling(length, min_periods=1).mean() * 100).fillna(0)
 
     length = 20
     width = 2
-    mid_line = mid_price.rolling(length).mean()
-    tech['upper_line'] = mid_line + width * mid_price.rolling(length).std().shift(1)
-    tech['lower_line'] = mid_line - width * mid_price.rolling(length).std().shift(1)
+    mid_line = mid_price.rolling(length, min_periods=1).mean()
+    tech['upper_line'] = mid_line + width * mid_price.rolling(length, min_periods=1).std().shift(1)
+    tech['lower_line'] = mid_line - width * mid_price.rolling(length, min_periods=1).std().shift(1)
 
     tech['fft'] = np.abs(np.fft.fft(mid_price))
 
@@ -270,4 +285,4 @@ def all_features(order_book_df, transaction_df, lag=50):
     features.append(volume_rank(order_book_df))
     features.append(ask_bid_correlation(order_book_df, lag))
     features.append(technical_indicators(mid_price))
-    return pd.concat(features, axis=1)[lag-1:].reset_index(drop=True)
+    return pd.concat(features, axis=1)
