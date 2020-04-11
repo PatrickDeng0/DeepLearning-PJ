@@ -6,7 +6,7 @@ import features
 import auto_features
 import OButil as ob
 from sklearn.model_selection import train_test_split
-
+import pickle
 
 class RNNModel:
     # delete keep_prob, timesteps, num_layers, display_step, _lambd
@@ -106,18 +106,25 @@ if __name__ == "__main__":
     X, Y = ob.convert_to_dataset(X, window_size=10)
     X, Y = ob.over_sample(X, Y)
 
-    acc = np.zeros(100)
-    for i in range(100):
-        train_X, test_X, train_Y, test_Y = train_test_split(X, Y, test_size=0.1)
-        train_X, val_X, train_Y, val_Y = train_test_split(train_X, train_Y, test_size=0.1)
+    with open("X.pickle", "w") as f:
+        pickle.dump(X, f)
 
-        rnn = RNNModel(learning_rate=0.001, n_epoch=100, batch_size=512,
-                       num_hidden=32, log_files_path=os.path.join(os.getcwd(), 'logs'),
-                       method='LSTMs', output_size=3)
+    with open("Y.pickle", "w") as f:
+        pickle.dump(Y, f)
 
-        rnn.train(train_X, train_Y, val_X, val_Y)
 
-        acc[i] = (rnn.predict(test_X).argmax(1) == test_Y).mean()
+#    acc = np.zeros(100)
+#    for i in range(100):
+#        train_X, test_X, train_Y, test_Y = train_test_split(X, Y, test_size=0.1)
+#        train_X, val_X, train_Y, val_Y = train_test_split(train_X, train_Y, test_size=0.1)
+
+#        rnn = RNNModel(learning_rate=0.001, n_epoch=100, batch_size=512,
+#                       num_hidden=32, log_files_path=os.path.join(os.getcwd(), 'logs'),
+#                       method='LSTMs', output_size=3)
+
+#        rnn.train(train_X, train_Y, val_X, val_Y)
+
+#         acc[i] = (rnn.predict(test_X).argmax(1) == test_Y).mean()
 
     # out of sample accuracy
-    print("Averaged out of sample accuracy:", acc.mean())
+#    print("Averaged out of sample accuracy:", acc.mean())

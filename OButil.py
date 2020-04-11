@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import datetime as dt
 import csv
-from imblearn.over_sampling import RandomOverSampler
 
 # Global Variables
 Q_TIME, Q_BID, Q_BIDSIZ, Q_ASK, Q_ASKSIZ = 0, 1, 2, 3, 4
@@ -139,7 +138,7 @@ class OrderBook:
         return np.array(header)
 
 
-def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transaction_filename):
+def preprocess_data(quote_dir, trade_dir, order_book_filename, transaction_filename):
     current = dt.datetime.now()
     df_quote = pd.read_csv(quote_dir)
     df_trade = pd.read_csv(trade_dir)
@@ -187,7 +186,7 @@ def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transacti
     def handle_quote(quote_idx):
         order_book.handle_quote(df_quote[quote_idx])
 
-    with open(out_order_book_filename, 'w', newline='') as file:
+    with open(order_book_filename, 'w', newline='') as file:
         recorder = csv.writer(file, delimiter=',')
         recorder.writerow(order_book.show_header())
         while trade_index < n_trade and quote_index < n_quote:
@@ -204,7 +203,7 @@ def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transacti
             handle_quote(quote_index)
             quote_index += 1
 
-    pd.DataFrame(transactions).to_csv(out_transaction_filename, header=['tx_price', 'tx_size', 'tx_direction'], index=False)
+    pd.DataFrame(transactions).to_csv(transaction_filename, header=['tx_price', 'tx_size', 'tx_direction'], index=False)
 
     print('Time lapse:', (dt.datetime.now() - current).total_seconds())
 
@@ -215,38 +214,22 @@ def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transacti
 # What is training dataset?
 # Now we divide the dataset into separate epochs where length of epochs is the window size +1
 # Window size as data input, the last line as for judge the movement of mid price
-def convert_to_dataset(data_df, window_size=10):
-    data = data_df.values
+def convert_to_dataset(filename, window_size):
+    data = pd.read_csv(filename, header=None).values
     num_epochs = data.shape[0] // (window_size + 1)
     epochs_data = data[:num_epochs * (window_size + 1)]
     epochs_data = epochs_data.reshape(num_epochs, window_size + 1, epochs_data.shape[1])
     X = epochs_data[:, :-1, :]
 
     # Y: 0 for downwards, 1 for upwards
-    # assuming the first and the third column are ask_price_1 and bid_price_1
     mid_prices = np.mean(epochs_data[:, -2:, :3:2], axis=2)
     Y = np.diff(mid_prices, axis=1).squeeze()
     return X, Y
 
 
-def over_sample(X, Y):
-    # A lot of Y is 0: so actually we need 3 labels: 0 as down, 1 as remain, 2 as up
-    Y_bar = Y / np.abs(Y)
-    Y_bar = np.nan_to_num(Y_bar, 0).astype(int) + 1
-
-    # Reshape X for Oversampling, and then reshape back
-    X_bar = np.nan_to_num(X, 0)
-    X_shape = X_bar.shape
-    X_bar = X_bar.reshape((X_shape[0], -1))
-    model_RandomUnderSampler = RandomOverSampler(sampling_strategy='all')
-    X_bar, Y_bar = model_RandomUnderSampler.fit_sample(X_bar, Y_bar)
-    X_bar = X_bar.reshape((-1, X_shape[1], X_shape[2]))
-
-    return X_bar, Y_bar
-
-
 if __name__ == '__main__':
     # testing
     data_dir = '../Data/'
-    preprocess_data('your_quote.csv', 'your_trade.csv', 'orderbook.csv', 'transaction.csv')
-    X, Y = convert_to_dataset(pd.read_csv(data_dir + 'orderbook.csv', header=None), window_size=10)
+    preprocess_data(data_dir + 'INTC_quote_20120621.csv', data_dir + 'INTC_trade_20120621.csv',
+                    data_dir + 'orderbook.csv')
+    X, Y = convert_to_dataset(data_dir + 'orderbook.csv', window_size=10)
