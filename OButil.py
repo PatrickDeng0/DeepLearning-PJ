@@ -140,7 +140,8 @@ class OrderBook:
 
 
 def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transaction_filename):
-    current = dt.datetime.now()
+    print("Start pre-processing data")
+    start_time = dt.datetime.now()
     df_quote = pd.read_csv(quote_dir)
     df_trade = pd.read_csv(trade_dir)
 
@@ -206,7 +207,7 @@ def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transacti
 
     pd.DataFrame(transactions).to_csv(out_transaction_filename, header=['tx_price', 'tx_size', 'tx_direction'], index=False)
 
-    print('Time lapse:', (dt.datetime.now() - current).total_seconds())
+    print('Finished pre-processing data, time lapse:', (dt.datetime.now() - start_time).total_seconds())
 
     return
 
