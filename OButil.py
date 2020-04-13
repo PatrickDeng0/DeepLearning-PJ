@@ -30,9 +30,14 @@ class OrderBook:
         self.bid_prices = sorted(list(self.bids.keys()), reverse=True)
 
     # Get the mid price of current order book
+    # Consider if one side has 0 depth
     def get_mid_price(self):
-        if len(self.ask_prices) == 0 or len(self.bid_prices) == 0:
+        if len(self.ask_prices) == 0 and len(self.bid_prices) == 0:
             return 0
+        elif len(self.ask_prices) == 0:
+            return self.bid_prices[0]
+        elif len(self.bid_prices) == 0:
+            return self.ask_prices[0]
         else:
             return (self.ask_prices[0] + self.bid_prices[0]) / 2
 
@@ -40,13 +45,15 @@ class OrderBook:
     def handle_quote(self, quote):
         self.time = quote[Q_TIME]
         # Update bids
-        self.bids[quote[Q_BID]] = quote[Q_BIDSIZ] * 100
+        if quote[Q_BID] > 0:
+            self.bids[quote[Q_BID]] = quote[Q_BIDSIZ] * 100
         for price in self.bid_prices:
             if price > quote[Q_BID]:
                 del self.bids[price]
 
         # Update asks
-        self.asks[quote[Q_ASK]] = quote[Q_ASKSIZ] * 100
+        if quote[Q_ASK] > 0:
+            self.asks[quote[Q_ASK]] = quote[Q_ASKSIZ] * 100
         for price in self.ask_prices:
             if price < quote[Q_ASK]:
                 del self.asks[price]
@@ -75,7 +82,7 @@ class OrderBook:
             else:
                 break
 
-    # For order book update when the trade is sell
+    # For order book update when the trade is buy
     def buy_trade_update(self, trade_price, trade_size):
         # Buy limit order executed, now bid order book would change. Priority is increased by prices
         filled_size = 0
@@ -118,17 +125,26 @@ class OrderBook:
         return direct
 
     def show_order_book(self):
-        def cut_depth(prices):
-            while len(prices) < self.depth:
-                prices.append(np.nan)
-            return prices
+        def cut_depth(prices, sizes):
+            pad_prices = prices.copy()
+            res_sizes = [sizes[price] for price in pad_prices]
+            if len(pad_prices) == 0:
+                return [0 for _ in range(self.depth)], [0 for _ in range(self.depth)]
+            else:
+                while len(pad_prices) < self.depth:
+                    pad_prices.append(pad_prices[-1])
+                    res_sizes.append(0)
+                return pad_prices, res_sizes
 
-        ask_prices = cut_depth(self.ask_prices.copy())
-        bid_prices = cut_depth(self.bid_prices.copy())
+        ask_prices, ask_sizes = cut_depth(self.ask_prices, self.asks)
+        bid_prices, bid_sizes = cut_depth(self.bid_prices, self.bids)
         res = []
         for i in range(self.depth):
-            res.extend([ask_prices[i], self.asks.get(ask_prices[i], np.nan), bid_prices[i],
-                        self.bids.get(bid_prices[i], np.nan)])
+            res.extend([ask_prices[i], ask_sizes[i],
+                        bid_prices[i], bid_sizes[i]])
+
+        # Add the mid_price of each orderbook (Using new consideration)
+        res.append(self.get_mid_price())
         return np.array(res)
 
     def show_header(self):
@@ -136,12 +152,12 @@ class OrderBook:
         for i in range(self.depth):
             header += ["ask_px{}".format(i + 1), "ask_sz{}".format(i + 1), "bid_px{}".format(i + 1),
                        "bid_sz{}".format(i + 1)]
+        header.append('mid_price')
         return np.array(header)
 
 
 def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transaction_filename):
-    print("Start pre-processing data")
-    start_time = dt.datetime.now()
+    current = dt.datetime.now()
     df_quote = pd.read_csv(quote_dir)
     df_trade = pd.read_csv(trade_dir)
 
@@ -207,7 +223,7 @@ def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transacti
 
     pd.DataFrame(transactions).to_csv(out_transaction_filename, header=['tx_price', 'tx_size', 'tx_direction'], index=False)
 
-    print('Finished pre-processing data, time lapse:', (dt.datetime.now() - start_time).total_seconds())
+    print('Time lapse:', (dt.datetime.now() - current).total_seconds())
 
     return
 
@@ -216,17 +232,30 @@ def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transacti
 # What is training dataset?
 # Now we divide the dataset into separate epochs where length of epochs is the window size +1
 # Window size as data input, the last line as for judge the movement of mid price
-def convert_to_dataset(data_df, window_size=10):
+def convert_to_dataset(data_fn, window_size=10, mid_price_window=5):
+    data_df = pd.read_csv(data_fn)
     data = data_df.values
-    num_epochs = data.shape[0] // (window_size + 1)
-    epochs_data = data[:num_epochs * (window_size + 1)]
-    epochs_data = epochs_data.reshape(num_epochs, window_size + 1, epochs_data.shape[1])
-    X = epochs_data[:, :-1, :]
+    num_epochs = data.shape[0] // (window_size + mid_price_window)
+    epochs_data = data[:num_epochs * (window_size + mid_price_window)]
+    epochs_data = epochs_data.reshape(num_epochs, window_size + mid_price_window, epochs_data.shape[1])
+
+    # Now epochs_data[:,:,-1] represents the mid_price of each time
+    # X_all: all the X time including mid_price (under new consideration)
+    # X: the output X, exclude last column from X_all
+    X_all = epochs_data[:, :-mid_price_window, :]
+    X = X_all[:, :, :-1]
+
+    # Compute X moving average mid price (In the previous mid_price_window size)
+    X_mid_prices = X_all[:, -mid_price_window:, -1]
+    X_mid_prices = np.mean(X_mid_prices, axis=1)
 
     # Y: 0 for downwards, 1 for upwards
     # assuming the first and the third column are ask_price_1 and bid_price_1
-    mid_prices = np.mean(epochs_data[:, -2:, :3:2], axis=2)
-    Y = np.diff(mid_prices, axis=1).squeeze()
+    # Compute Y moving average mid price
+    Y_mid_prices = epochs_data[:, -mid_price_window:, -1]
+    Y_mid_prices = np.mean(Y_mid_prices, axis=1)
+
+    Y = Y_mid_prices - X_mid_prices
     return X, Y
 
 
@@ -249,5 +278,6 @@ def over_sample(X, Y):
 if __name__ == '__main__':
     # testing
     data_dir = '../Data/'
-    preprocess_data('your_quote.csv', 'your_trade.csv', 'orderbook.csv', 'transaction.csv')
-    X, Y = convert_to_dataset(pd.read_csv(data_dir + 'orderbook.csv', header=None), window_size=10)
+    preprocess_data(data_dir + 'INTC_quote_20120621.csv', data_dir + 'INTC_trade_20120621.csv',
+                    data_dir + 'orderbook.csv', data_dir + 'transaction.csv')
+    # X, Y = convert_to_dataset(data_dir + 'orderbook.csv', window_size=10, mid_price_window=5)
