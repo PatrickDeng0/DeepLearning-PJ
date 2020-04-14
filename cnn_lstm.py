@@ -128,24 +128,23 @@ class FullModel:
 if __name__ == "__main__":
     out_order_book_filename = './data/order_book.csv'
     out_transaction_filename = './data/transaction.csv'
+    # stored results from auto_features.py
     auto_features_filename = "./data/auto_features.csv"
     lag = 50
 
-    obutil.preprocess_data('./data/quote_intc_110816.csv', './data/trade_intc_110816.csv',
-                           out_order_book_filename, out_transaction_filename)
     order_book_df = pd.read_csv(out_order_book_filename)[lag - 1:].reset_index(drop=True)
     transaction_df = pd.read_csv(out_transaction_filename)[lag - 1:].reset_index(drop=True)
     f = pd.read_csv(auto_features_filename, header=None)
 
     X = pd.concat([transaction_df, f, order_book_df], axis=1)
-    X, Y = obutil.convert_to_dataset(X, window_size=10)
+    X, Y = obutil.convert_to_dataset(X, window_size=10, mid_price_window=1)
     X, Y = obutil.over_sample(X, Y)
     X = tf.cast(X, dtype=tf.float32).numpy()
     Y = tf.one_hot(Y, depth=3).numpy()
     leaky_alpha = 0.01
     learning_rate = 0.0001
     training_epochs = 500
-    batch_size = 50
+    batch_size = 512
 
     train_X, test_X, train_Y, test_Y = train_test_split(X, Y, test_size=0.1)
     splits = np.arange(batch_size, len(train_X), batch_size)
@@ -156,6 +155,7 @@ if __name__ == "__main__":
 
     optimizer = tf.optimizers.Adam(learning_rate)
 
+    results = np.zeros(training_epochs)
     start_time = time.time()
     for epoch in range(training_epochs):
         print("Starting epoch {}".format(epoch))
@@ -170,5 +170,7 @@ if __name__ == "__main__":
         actual = np.argmax(test_Y, axis=1)
         acc = (pred == actual).mean()
         print("Out-of-sample accuracy: {}".format(acc))
+        results[epoch] = acc
 
     print("Total time lapse: {0:.3f} seconds".format(time.time() - start_time))
+    pd.DataFrame(results, columns=['acc']).to_csv('multimodal_results.csv')
