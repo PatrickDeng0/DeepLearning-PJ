@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
     o = order_book_df[lag - 1:].to_numpy()
     t = transaction_df[lag - 1:].to_numpy()
-    X = np.concatenate((o, t, auto_f.numpy()), axis=1)
+    X = np.concatenate((t, auto_f, o), axis=1)
     X = pd.DataFrame(X)
 
     X, Y = ob.convert_to_dataset(X, window_size=10)
@@ -111,13 +111,11 @@ if __name__ == "__main__":
     start_time = time.time()
 
     train_X, test_X, train_Y, test_Y = train_test_split(X, Y, test_size=0.1)
-    train_X, val_X, train_Y, val_Y = train_test_split(train_X, train_Y, test_size=0.1)
 
-    rnn = RNNModel(learning_rate=0.001, n_epoch=500, batch_size=512,
-                   num_hidden=32, log_files_path=os.path.join(os.getcwd(), 'logs'),
-                   method='LSTMs', output_size=3)
+    rnn = RNNModel(learning_rate=0.0001, n_epoch=500, batch_size=50,
+                   num_hidden=32, method='LSTMs', output_size=3)
 
-    rnn.train(train_X, train_Y, val_X, val_Y)
+    rnn.train(train_X, train_Y, test_X, test_Y)
 
     # out of sample accuracy
     print("Out of sample accuracy:", (rnn.predict(test_X).argmax(1) == test_Y).mean())
