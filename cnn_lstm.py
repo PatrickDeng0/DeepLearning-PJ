@@ -171,4 +171,4 @@ if __name__ == "__main__":
         acc = (pred == actual).mean()
         print("Out-of-sample accuracy: {}".format(acc))
 
-    print("Total time lapse:", time.time() - start_time)
+    print("Total time lapse: {0:.3f} seconds".format(time.time() - start_time))

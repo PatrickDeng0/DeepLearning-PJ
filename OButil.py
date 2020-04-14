@@ -224,7 +224,7 @@ def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transacti
 
     pd.DataFrame(transactions).to_csv(out_transaction_filename, header=['tx_price', 'tx_size', 'tx_direction'], index=False)
 
-    print('Finished pre-processing data, time lapse:', (dt.datetime.now() - start_time).total_seconds())
+    print('Finished pre-processing data, {0:.3f} seconds'.format((dt.datetime.now() - start_time).total_seconds()))
 
     return
 

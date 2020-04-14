@@ -121,4 +121,4 @@ if __name__ == "__main__":
 
     # out of sample accuracy
     print("Out of sample accuracy:", (rnn.predict(test_X).argmax(1) == test_Y).mean())
-    print("Total time:", time.time() - start_time)
+    print("Total time: {0:.3f} seconds".format(time.time() - start_time))

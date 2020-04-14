@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import time
 
 """
 All feature functions assume the same number of rows in order book and trades
@@ -16,7 +17,7 @@ def div(nu, de, alpha=1):
 
 
 def mid(order_book_df):
-    return (order_book_df['ask_px1'] + order_book_df['bid_px1']) / 2
+    return order_book_df.iloc[:, -1]
 
 
 def order_flow(order_book_df, transaction_df, lag=50):
@@ -271,6 +272,8 @@ def technical_indicators(mid_price):
 
 
 def all_features(order_book_df, transaction_df, lag=50):
+    start_t = time.time()
+    print("Start creating features from order books and transactions data")
     features = []
     mid_price = mid(order_book_df)
     features.append(order_flow(order_book_df, transaction_df, lag))
@@ -285,4 +288,15 @@ def all_features(order_book_df, transaction_df, lag=50):
     features.append(volume_rank(order_book_df))
     features.append(ask_bid_correlation(order_book_df, lag))
     features.append(technical_indicators(mid_price))
+    print("Finished creating features, time lapse: {0:.3f} seconds".format(time.time() - start_t))
     return pd.concat(features, axis=1)
+
+
+if __name__ == "__main__":
+    order_book_filename = './data/order_book.csv'
+    transaction_filename = './data/transaction.csv'
+    o = pd.read_csv(order_book_filename)
+    t = pd.read_csv(transaction_filename)
+    lag = 50
+    f = all_features(o, t)
+    f.to_csv("./data/raw_features.csv")
