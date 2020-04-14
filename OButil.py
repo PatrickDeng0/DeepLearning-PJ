@@ -157,7 +157,8 @@ class OrderBook:
 
 
 def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transaction_filename):
-    current = dt.datetime.now()
+    print("Start pre-processing data")
+    start_time = dt.datetime.now()
     df_quote = pd.read_csv(quote_dir)
     df_trade = pd.read_csv(trade_dir)
 
@@ -223,7 +224,7 @@ def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transacti
 
     pd.DataFrame(transactions).to_csv(out_transaction_filename, header=['tx_price', 'tx_size', 'tx_direction'], index=False)
 
-    print('Time lapse:', (dt.datetime.now() - current).total_seconds())
+    print('Finished pre-processing data, time lapse:', (dt.datetime.now() - start_time).total_seconds())
 
     return
 
@@ -232,8 +233,7 @@ def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transacti
 # What is training dataset?
 # Now we divide the dataset into separate epochs where length of epochs is the window size +1
 # Window size as data input, the last line as for judge the movement of mid price
-def convert_to_dataset(data_fn, window_size=10, mid_price_window=5):
-    data_df = pd.read_csv(data_fn)
+def convert_to_dataset(data_df, window_size=10, mid_price_window=5):
     data = data_df.values
     num_epochs = data.shape[0] // (window_size + mid_price_window)
     epochs_data = data[:num_epochs * (window_size + mid_price_window)]

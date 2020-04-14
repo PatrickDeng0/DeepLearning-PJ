@@ -131,11 +131,13 @@ if __name__ == "__main__":
     auto_features_filename = "./data/auto_features.csv"
     lag = 50
 
+    obutil.preprocess_data('./data/quote_intc_110816.csv', './data/trade_intc_110816.csv',
+                           out_order_book_filename, out_transaction_filename)
     order_book_df = pd.read_csv(out_order_book_filename)[lag - 1:].reset_index(drop=True)
     transaction_df = pd.read_csv(out_transaction_filename)[lag - 1:].reset_index(drop=True)
     f = pd.read_csv(auto_features_filename, header=None)
 
-    X = pd.concat([order_book_df, transaction_df, f], axis=1)
+    X = pd.concat([transaction_df, f, order_book_df], axis=1)
     X, Y = obutil.convert_to_dataset(X, window_size=10)
     X, Y = obutil.over_sample(X, Y)
     X = tf.cast(X, dtype=tf.float32).numpy()
