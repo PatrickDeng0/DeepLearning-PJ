@@ -140,6 +140,7 @@ def effective_spread(order_book_df, transaction_df):
     return pd.DataFrame({'eff_spread': (transaction_df['tx_price'] / mid_price - 1) * 1000})
 
 
+
 def illiquidity(order_book_df, lag=50):
     """
     The illiquidity is computed as the ratio of absolute stock return to its dollar volume.

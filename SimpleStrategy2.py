@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import features
+import auto_features
+import OButil as ob
 
 '''
 Notes: in this version, we did not check the accuracy of
@@ -130,6 +133,27 @@ def plot(d):
     plt.legend()
     plt.show()
 
+def strategy_performance(model, order_book_df, transaction_df, window_size=10, mid_price_window=5, lag=50, code_size=8, encoder_layer_sizes= [32, 16]):
+    f = features.all_features(order_book_df, transaction_df, lag)[lag - 1:].ffill().bfill().reset_index(drop=True)
+    auto_f = auto_features.auto_features(f.to_numpy(), code_size, encoder_layer_sizes,
+                                         num_epochs=1, batch_size=4, display_step=1000)
+
+    test_df = order_book_df[lag - 1:]
+
+    o = test_df.to_numpy()
+    t = transaction_df[lag - 1:].to_numpy()
+    X = np.concatenate((t, auto_f, o), axis=1)
+    X = pd.DataFrame(X)
+
+    X, Y = ob.convert_to_dataset(X, window_size=10)
+    X = np.nan_to_num(X)
+    pred_index = np.arange(window_size, len(test_df), window_size+mid_price_window)
+    pred = np.ones(len(test_df))
+    pred[pred_index] = model.predict(X).argmax(1)
+    d = pd.DataFrame(
+        {"bid_px1": test_df["bid_px1"], "ask_px1": test_df["ask_px1"], "pred": pred-1}
+    )
+    return d
 
 if __name__ == "__main__":
     '''
@@ -140,3 +164,4 @@ if __name__ == "__main__":
         {"bid_px1": df["bid_px1"], "ask_px1": df["ask_px1"], "pred": np.random.choice([-1, 1], len(df["bid_px1"]))})
 
     plot(d)
+

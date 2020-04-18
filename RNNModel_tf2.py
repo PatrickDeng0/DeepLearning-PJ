@@ -8,6 +8,7 @@ import features
 import auto_features
 import OButil as ob
 from sklearn.model_selection import train_test_split
+import SimpleStrategy2 as ss2
 
 
 class RNNModel:
@@ -93,12 +94,12 @@ if __name__ == "__main__":
     out_order_book_filename = './data/order_book.csv'
     out_transaction_filename = './data/transaction.csv'
 
-    ob.preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transaction_filename)
+    #ob.preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transaction_filename)
     order_book_df = pd.read_csv(out_order_book_filename)
     transaction_df = pd.read_csv(out_transaction_filename)
     f = features.all_features(order_book_df, transaction_df, lag)[lag - 1:].ffill().bfill().reset_index(drop=True)
     auto_f = auto_features.auto_features(f.to_numpy(), code_size, encoder_layer_sizes,
-                                         num_epochs=10, batch_size=4, display_step=1000)
+                                         num_epochs=1, batch_size=4, display_step=1000)
 
     o = order_book_df[lag - 1:].to_numpy()
     t = transaction_df[lag - 1:].to_numpy()
@@ -112,7 +113,7 @@ if __name__ == "__main__":
 
     train_X, test_X, train_Y, test_Y = train_test_split(X, Y, test_size=0.1)
 
-    rnn = RNNModel(learning_rate=0.0001, n_epoch=500, batch_size=50,
+    rnn = RNNModel(learning_rate=0.0001, n_epoch=5, batch_size=50,
                    num_hidden=32, method='LSTMs', output_size=3)
 
     rnn.train(train_X, train_Y, test_X, test_Y)
@@ -120,3 +121,10 @@ if __name__ == "__main__":
     # out of sample accuracy
     print("Out of sample accuracy:", (rnn.predict(test_X).argmax(1) == test_Y).mean())
     print("Total time: {0:.3f} seconds".format(time.time() - start_time))
+
+    # test strategy, using the trained model rnn
+    d = ss2.strategy_performance(rnn, order_book_df, transaction_df, window_size=10, mid_price_window=5, lag=50)
+    ss2.plot(d)
+
+
+
