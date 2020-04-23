@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import features
-import auto_features
 import OButil as ob
 
 '''
@@ -133,23 +132,21 @@ def plot(d):
     plt.legend()
     plt.show()
 
-def strategy_performance(model, order_book_df, transaction_df, window_size=10, mid_price_window=5, lag=50, code_size=8, encoder_layer_sizes= [32, 16]):
-    f = features.all_features(order_book_df, transaction_df, lag)[lag - 1:].ffill().bfill().reset_index(drop=True)
-    auto_f = auto_features.auto_features(f.to_numpy(), code_size, encoder_layer_sizes,
-                                         num_epochs=1, batch_size=4, display_step=1000)
+def strategy_performance(model, order_book_df, transaction_df, window_size=10, mid_price_window=5, lag=50):
+    f = features.all_features(order_book_df, transaction_df, lag).iloc[:, 2:][lag - 1:].ffill().bfill().reset_index(drop=True) #iloc is to remove bid_size1, ask_size1 from the generated features to accomodate the model used in RNNModel_tf2's main()
 
     test_df = order_book_df[lag - 1:]
 
     o = test_df.to_numpy()
     t = transaction_df[lag - 1:].to_numpy()
-    X = np.concatenate((t, auto_f, o), axis=1)
+    X = np.concatenate((t, f, o), axis=1)
     X = pd.DataFrame(X)
-
-    X, Y = ob.convert_to_dataset(X, window_size=10)
-    X = np.nan_to_num(X)
-    pred_index = np.arange(window_size, len(test_df), window_size+mid_price_window)
+    X["mid"] = (test_df["bid_px1"]+test_df["ask_px1"])/2
+    test_X, action_time = ob.generate_test_dataset(X, window_size, mid_price_window)
+    test_X[:, :, -20:] = ob.OBnormal(test_X[:, :, -20:])
+    test_X = np.nan_to_num(test_X)
     pred = np.ones(len(test_df))
-    pred[pred_index] = model.predict(X).argmax(1)
+    pred[action_time] = model.predict(test_X).argmax(1)
     d = pd.DataFrame(
         {"bid_px1": test_df["bid_px1"], "ask_px1": test_df["ask_px1"], "pred": pred-1}
     )
@@ -159,9 +156,11 @@ if __name__ == "__main__":
     '''
     tested with data in the Data\orderbook.csv
     '''
-    df = pd.read_csv(r"C:\Users\Administrator\Desktop\DeepLearningProject\Data\orderbook.csv")
-    d = pd.DataFrame(
-        {"bid_px1": df["bid_px1"], "ask_px1": df["ask_px1"], "pred": np.random.choice([-1, 1], len(df["bid_px1"]))})
+    #df = pd.read_csv(r"C:\Users\Administrator\Desktop\DeepLearningProject\Data\orderbook.csv")
+    #d = pd.DataFrame(
+    #   {"bid_px1": df["bid_px1"], "ask_px1": df["ask_px1"], "pred": np.random.choice([-1, 1], len(df["bid_px1"]))})
 
-    plot(d)
+    #plot(d)
+
+
 

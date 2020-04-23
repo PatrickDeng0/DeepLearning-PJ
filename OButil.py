@@ -274,7 +274,6 @@ def over_sample(X, Y):
 
     return X_bar, Y_bar
 
-
 def OBnormal(data_X):
     X_normal = data_X.copy()
 
@@ -287,6 +286,22 @@ def OBnormal(data_X):
     X_normal[:, :, 1::2] = X_normal[:, :, 1::2] / size_normal
     return X_normal
 
+def generate_test_dataset(data_df, window_size=10, mid_price_window=5):
+    '''
+    :param ob_file_path: the order_book do not have column "mid", so we first will manually add the "mid" column
+    :param window_size: same with ob.convert_to_dataset
+    :param mid_price_window: same with ob.convert_to_dataset
+
+    :return:
+    test_X: image
+    y_time_index: the time stamp to take action
+    '''
+    test_images = []
+    for i in range(len(data_df)-window_size-mid_price_window):
+        test_images.append(convert_to_dataset(data_df[i:i+window_size+mid_price_window], window_size, mid_price_window)[0])
+    y_time_index = np.arange(window_size, len(data_df)-mid_price_window)
+    test_X = np.concatenate(test_images)
+    return test_X, y_time_index
 
 if __name__ == '__main__':
     # testing
