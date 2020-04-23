@@ -275,9 +275,22 @@ def over_sample(X, Y):
     return X_bar, Y_bar
 
 
+def OBnormal(data_X):
+    X_normal = data_X.copy()
+
+    # Price normalize
+    price_normal = X_normal[:, :, 0][:, :, np.newaxis]
+    X_normal[:, :, 0::2] = X_normal[:, :, 0::2] - price_normal
+
+    # Size normalize
+    size_normal = X_normal[:, :, 1][:, :, np.newaxis]
+    X_normal[:, :, 1::2] = X_normal[:, :, 1::2] / size_normal
+    return X_normal
+
+
 if __name__ == '__main__':
     # testing
-    data_dir = '../Data/'
+    data_dir = './data/'
     preprocess_data(data_dir + 'INTC_quote_20120621.csv', data_dir + 'INTC_trade_20120621.csv',
-                    data_dir + 'orderbook.csv', data_dir + 'transaction.csv')
+                    data_dir + 'order_book.csv', data_dir + 'transaction.csv')
     # X, Y = convert_to_dataset(data_dir + 'orderbook.csv', window_size=10, mid_price_window=5)

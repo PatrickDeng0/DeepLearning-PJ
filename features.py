@@ -20,6 +20,10 @@ def mid(order_book_df):
     return order_book_df.iloc[:, -1]
 
 
+def ask1(order_book_df):
+    return order_book_df[['ask_px1', 'ask_sz1']]
+
+
 def order_flow(order_book_df, transaction_df, lag=50):
     """
     order flow = the ratio of the volume of market buy(sell) orders arriving in the prior n observations
@@ -277,6 +281,7 @@ def all_features(order_book_df, transaction_df, lag=50):
     print("Start creating features from order books and transactions data")
     features = []
     mid_price = mid(order_book_df)
+    features.append(ask1(order_book_df))
     features.append(order_flow(order_book_df, transaction_df, lag))
     features.append(liquidity_imbalance(order_book_df))
     features.append(relative_mid_trend(order_book_df))

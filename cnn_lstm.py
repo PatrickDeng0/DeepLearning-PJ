@@ -6,7 +6,7 @@ import tensorflow as tf
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.layers import Dense, Bidirectional, LSTM
 
-import OButil as obutil
+import OButil as ob
 
 
 def init_weights(shape, name):
@@ -129,16 +129,20 @@ if __name__ == "__main__":
     out_order_book_filename = './data/order_book.csv'
     out_transaction_filename = './data/transaction.csv'
     # stored results from auto_features.py
-    auto_features_filename = "./data/auto_features.csv"
+    auto_features_filename = "./data/raw_features.csv"
     lag = 50
 
     order_book_df = pd.read_csv(out_order_book_filename)[lag - 1:].reset_index(drop=True)
     transaction_df = pd.read_csv(out_transaction_filename)[lag - 1:].reset_index(drop=True)
-    f = pd.read_csv(auto_features_filename, header=None)
+    f = pd.read_csv(auto_features_filename, index_col=0)[lag - 1:].reset_index(drop=True)
 
     X = pd.concat([transaction_df, f, order_book_df], axis=1)
-    X, Y = obutil.convert_to_dataset(X, window_size=10, mid_price_window=1)
-    X, Y = obutil.over_sample(X, Y)
+    X, Y = ob.convert_to_dataset(X, window_size=10, mid_price_window=1)
+
+    # Add orderbook normalize to X, replace the -20 to -1 location of X
+    X[:,:,-20:] = ob.OBnormal(X[:,:,-20:])
+
+    X, Y = ob.over_sample(X, Y)
     X = tf.cast(X, dtype=tf.float32).numpy()
     Y = tf.one_hot(Y, depth=3).numpy()
     leaky_alpha = 0.01
@@ -161,7 +165,7 @@ if __name__ == "__main__":
         print("Starting epoch {}".format(epoch))
         for train_x, labels in zip(train_X_batches, train_Y_batches):
             with tf.GradientTape() as tape:
-                loss = tf.nn.softmax_cross_entropy_with_logits(labels, m.fwd(train_x[:, :, :20], train_x[:, :, 20:]))
+                loss = tf.nn.softmax_cross_entropy_with_logits(labels, m.fwd(train_x[:, :, -20:], train_x[:, :, :-20]))
                 loss = tf.reduce_mean(loss)
             grads = tape.gradient(loss, m.get_vars())
             optimizer.apply_gradients(zip(grads, m.get_vars()))
