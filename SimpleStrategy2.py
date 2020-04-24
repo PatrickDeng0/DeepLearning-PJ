@@ -4,30 +4,6 @@ import pandas as pd
 import features
 import OButil as ob
 
-'''
-Notes: in this version, we did not check the accuracy of
- - 'pred_test'
- - 'time_merge'
-'''
-
-
-def pred_trans(pred_test):
-    pred = np.zeros(len(pred_test))
-    for i in range(len(pred_test)):
-        if pred_test[i][0] > pred_test[i][1]:
-            pred[i] = -1
-        else:
-            pred[i] = 1
-    return pred
-
-
-def time_merge(df, time_track, pred_test):
-    pred = pred_trans(pred_test)
-    time_track['pred'] = pred
-    d = df.merge(time_track, on='time')
-    return d
-
-
 class SimpleStrategy:
     def __init__(self, bid_price, ask_price, pred):
         """
@@ -133,7 +109,7 @@ def plot(d):
     plt.show()
 
 def strategy_performance(model, order_book_df, transaction_df, window_size=10, mid_price_window=5, lag=50):
-    f = features.all_features(order_book_df, transaction_df, lag).iloc[:, 2:][lag - 1:].ffill().bfill().reset_index(drop=True) #iloc is to remove bid_size1, ask_size1 from the generated features to accomodate the model used in RNNModel_tf2's main()
+    f = features.all_features(order_book_df, transaction_df, lag)[lag - 1:].ffill().bfill().reset_index(drop=True) #iloc is to remove bid_size1, ask_size1 from the generated features to accomodate the model used in RNNModel_tf2's main()
 
     test_df = order_book_df[lag - 1:]
 
@@ -156,11 +132,11 @@ if __name__ == "__main__":
     '''
     tested with data in the Data\orderbook.csv
     '''
-    #df = pd.read_csv(r"C:\Users\Administrator\Desktop\DeepLearningProject\Data\orderbook.csv")
-    #d = pd.DataFrame(
-    #   {"bid_px1": df["bid_px1"], "ask_px1": df["ask_px1"], "pred": np.random.choice([-1, 1], len(df["bid_px1"]))})
+    df = pd.read_csv(r"C:\Users\Administrator\Desktop\DeepLearningProject\Data\orderbook.csv")
+    d = pd.DataFrame(
+       {"bid_px1": df["bid_px1"], "ask_px1": df["ask_px1"], "pred": np.random.choice([-1, 1], len(df["bid_px1"]))})
 
-    #plot(d)
+    plot(d)
 
 
 
