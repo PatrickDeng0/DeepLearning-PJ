@@ -306,6 +306,8 @@ def generate_test_dataset(data_df, window_size=10, mid_price_window=5):
 if __name__ == '__main__':
     # testing
     data_dir = './data/'
-    preprocess_data(data_dir + 'INTC_quote_20120621.csv', data_dir + 'INTC_trade_20120621.csv',
+    #preprocess_data(data_dir + 'INTC_quote_20120621.csv', data_dir + 'INTC_trade_20120621.csv',
+    #                data_dir + 'order_book.csv', data_dir + 'transaction.csv')
+    preprocess_data(data_dir + 'quote_intc_110816.csv', data_dir + 'trade_intc_110816.csv',
                     data_dir + 'order_book.csv', data_dir + 'transaction.csv')
     # X, Y = convert_to_dataset(data_dir + 'orderbook.csv', window_size=10, mid_price_window=5)

@@ -86,7 +86,6 @@ def main():
     transaction_df = pd.read_csv(out_transaction_filename)[lag - 1:].reset_index(drop=True)
     f = pd.read_csv(auto_features_filename, index_col=0)[lag - 1:].reset_index(drop=True)
     X = pd.concat([transaction_df, f, order_book_df], axis=1)
-    X["mid"] = (X["bid_px1"] + X["ask_px1"])/2
 
     # Order book normalization
     X, Y = ob.convert_to_dataset(X, window_size=10, mid_price_window=1)
@@ -131,7 +130,6 @@ if __name__ == '__main__':
     transaction_df = pd.read_csv(out_transaction_filename)[lag - 1:].reset_index(drop=True)
     f = pd.read_csv(auto_features_filename, index_col=0)[lag - 1:].reset_index(drop=True)
     X = pd.concat([transaction_df, f, order_book_df], axis=1)
-    X["mid"] = (X["bid_px1"] + X["ask_px1"])/2
 
 
     # Order book normalization

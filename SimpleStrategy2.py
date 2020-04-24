@@ -141,7 +141,7 @@ def strategy_performance(model, order_book_df, transaction_df, window_size=10, m
     t = transaction_df[lag - 1:].to_numpy()
     X = np.concatenate((t, f, o), axis=1)
     X = pd.DataFrame(X)
-    X["mid"] = (test_df["bid_px1"]+test_df["ask_px1"])/2
+
     test_X, action_time = ob.generate_test_dataset(X, window_size, mid_price_window)
     test_X[:, :, -20:] = ob.OBnormal(test_X[:, :, -20:])
     test_X = np.nan_to_num(test_X)
