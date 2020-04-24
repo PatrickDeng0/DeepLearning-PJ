@@ -75,6 +75,10 @@ class SimpleStrategy:
 
             self.ret_strat[i] = self.wealth[i] / self.cash0 - 1
 
+        # tackle the problem when there is 0 price in both bid_px1 or ask_px1
+        self.ret_strat[self.ret_strat == -1] = np.nan
+        self.ret_strat = pd.Series(self.ret_strat).ffill().values
+
         return self.ret_strat
 
     def get_position(self):
@@ -94,7 +98,7 @@ class SimpleStrategy:
 
 
 def plot(d):
-    ret_stra = SimpleStrategy(np.array(d['bid_px1']), np.array(d['ask_px1']), np.array(d['pred']))
+    ret_stra = SimpleStrategy(np.array(d['ask_px1']), np.array(d['bid_px1']), np.array(d['pred']))
 
     fig = plt.figure(figsize=(15, 10))
     plt.plot(ret_stra.get_ret(cost_rate=0), label='No transaction cost')
@@ -104,7 +108,7 @@ def plot(d):
     plt.plot(ret_stra.get_ret(cost_rate=.0005), label='Transaction cost = 0.05%')
     ret_stra.flush()
     plt.plot(ret_stra.get_ret(cost_rate=.001), label='Transaction cost = 0.1%')
-
+    plt.grid()
     plt.legend()
     plt.show()
 

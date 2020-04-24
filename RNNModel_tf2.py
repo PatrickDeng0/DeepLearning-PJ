@@ -111,11 +111,17 @@ def main():
     rnn.evaluate(test_data)
 
     print("Total time: {0:.3f} seconds".format(time.time() - start_time))
+
+    # testing strategy performance
+    d = ss2.strategy_performance(rnn, order_book_df, transaction_df, window_size=10, mid_price_window=1, lag=50)
+    ss2.plot(d)
+
     return rnn
 
 
 if __name__ == '__main__':
-    #main()
+    main()
+    '''
     n_epoch = 50
     batch_size = 512
     lag = 50
@@ -159,5 +165,5 @@ if __name__ == '__main__':
 
     d = ss2.strategy_performance(rnn, order_book_df, transaction_df, window_size=10, mid_price_window=1, lag=50)
     ss2.plot(d)
-
+    '''
 
