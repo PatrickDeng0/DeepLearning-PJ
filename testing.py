@@ -28,18 +28,18 @@ for model_type in model_types:
         batch_size = 512
         lag = 50
 
-        order_book_df = pd.read_csv('./data/orderbook.csv')[lag - 1:].reset_index(drop=True)
-        transaction_df = pd.read_csv('./data/transaction.csv')[lag - 1:].reset_index(drop=True)
+        order_book = pd.read_csv('./data/orderbook.csv')[lag - 1:].reset_index(drop=True)
+        transaction = pd.read_csv('./data/transaction.csv')[lag - 1:].reset_index(drop=True)
 
         if input_type in ['obf', 'obfn']:
-            f = features.all_features(order_book_df, transaction_df, lag)[lag - 1:].ffill().bfill().reset_index(drop=True)
+            f = features.all_features(order_book, transaction, lag)[lag - 1:].ffill().bfill().reset_index(drop=True)
             pca = PCA(n_components=0.99)
             f = pd.DataFrame(pca.fit_transform(f))
-            o = order_book_df[lag - 1:].reset_index(drop=True)
-            t = transaction_df[lag - 1:].reset_index(drop=True)
+            o = order_book[lag - 1:].reset_index(drop=True)
+            t = transaction[lag - 1:].reset_index(drop=True)
             X = pd.concat([t, f, o], axis=1)
         else:
-            X = pd.concat([transaction_df, order_book_df], axis=1)
+            X = pd.concat([transaction, order_book], axis=1)
 
         X, Y = OButil.convert_to_dataset(X, window_size=10, mid_price_window=1)
         if input_type in ['obfn', 'obn']:
