@@ -112,6 +112,21 @@ def plot(d):
     plt.legend()
     plt.show()
 
+    ret_stra.flush()
+
+    fig = plt.figure(figsize=(15, 10))
+    plt.plot(ret_stra.get_ret(cost_rate=0, method=2), label='No transaction cost')
+    ret_stra.flush()
+    plt.plot(ret_stra.get_ret(cost_rate=.0001, method=2), label='Transaction cost = 0.01%')
+    ret_stra.flush()
+    plt.plot(ret_stra.get_ret(cost_rate=.0005, method=2), label='Transaction cost = 0.05%')
+    ret_stra.flush()
+    plt.plot(ret_stra.get_ret(cost_rate=.001, method=2), label='Transaction cost = 0.1%')
+    plt.grid()
+    plt.legend()
+    plt.show()
+
+
 def strategy_performance(model, order_book_df, transaction_df, window_size=10, mid_price_window=5, lag=50):
     f = features.all_features(order_book_df, transaction_df, lag)[lag - 1:].ffill().bfill().reset_index(drop=True) #iloc is to remove bid_size1, ask_size1 from the generated features to accomodate the model used in RNNModel_tf2's main()
 
