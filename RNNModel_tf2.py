@@ -1,9 +1,11 @@
-import tensorflow as tf
-import numpy as np
+import os
+import time
+
 import pandas as pd
-import OButil as ob
+import tensorflow as tf
 from sklearn.model_selection import train_test_split
-import os, time
+
+import OButil as ob
 import SimpleStrategy2 as ss2
 
 
@@ -61,7 +63,7 @@ class RNNModel:
 
     def train(self, train_data, valid_data, n_epoch):
         log_files_path = self._log_files_path
-        self._model.fit(train_data, validation_data=valid_data, epochs=n_epoch)
+        self._model.fit(train_data, validation_data=valid_data, epochs=n_epoch, verbose=2)
         self._model.save(log_files_path)
 
     def evaluate(self, test_data):
