@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import copy
 import features
 import OButil as ob
 
@@ -12,8 +13,8 @@ class SimpleStrategy:
         :param pred: numpy.array of pred, whose elements is in {1,-1}
         """
         self.pred = pred
-        self.ask_price = ask_price
-        self.bid_price = bid_price
+        self.ask_price = copy.copy(ask_price)
+        self.bid_price = copy.copy(bid_price)
         self.wealth = np.zeros_like(self.ask_price)
         self.position = np.zeros_like(self.ask_price)
         self.cash0 = 100000
@@ -21,6 +22,13 @@ class SimpleStrategy:
         self.method = 1
         self.money = np.zeros_like(self.ask_price)
         self.ret_strat = np.zeros_like(self.ask_price)
+        
+        # preprocess for price==0
+        ask_price[ask_price==0] = np.nan
+        bid_price[bid_price==0] = np.nan
+        refined_ask_price = pd.Series(ask_price).ffill()
+        refined_bid_price = pd.Series(bid_price).ffill()
+        self.mid_price = (0.5*(refined_ask_price+refined_bid_price)).values
 
     def get_ret(self, cost_rate=0.0001, method=1, cash0=100000):
         """
@@ -33,9 +41,11 @@ class SimpleStrategy:
         self.cost_rate = cost_rate
         self.method = method
         self.money += self.cash0
+        
 
         # calculate the first buying time
         ini_buy = self.pred.argmax()
+        self.ini_buy = ini_buy
         while self.ask_price[ini_buy] == 0:
             ini_buy += self.pred[ini_buy + 1:].argmax() + 1
             if ini_buy > len(self.ask_price):
@@ -44,42 +54,36 @@ class SimpleStrategy:
 
         for i in range(ini_buy, len(self.bid_price)):
             # buy
-            if (self.pred[i] == 1) and (self.money[i - 1] >= 0) and (self.ask_price[i] > 0):
+            if (self.pred[i] == 1) and (self.money[i - 1] >= 0) and (self.bid_price[i] > 0):
                 if self.method == 1:
                     self.position[i] = self.position[i - 1] + self.money[i - 1] / (
-                            self.ask_price[i] * (1 + self.cost_rate))  # buy all
+                            self.bid_price[i] * (1 + self.cost_rate))  # buy all
                     self.money[i] = 0
                 else:
                     self.position[i] = self.position[i - 1] + 1  # buy one
-                    self.money[i] = self.money[i - 1] - self.ask_price[i] * (1 + self.cost_rate)
+                    self.money[i] = self.money[i - 1] - self.bid_price[i] * (1 + self.cost_rate)
+                self.wealth[i] = self.money[i] + self.position[i]*self.bid_price[i]
 
             # sell
-            elif (self.pred[i] == -1) and (self.position[i - 1] >= 0) and (self.bid_price[i] > 0):
+            elif (self.pred[i] == -1) and (self.position[i - 1] >= 0) and (self.ask_price[i] > 0):
                 if self.method == 1:
                     self.position[i] = 0
-                    self.money[i] = self.money[i - 1] + self.position[i - 1] * self.bid_price[i] * (1 - self.cost_rate)
+                    self.money[i] = self.money[i - 1] + self.position[i - 1] * self.ask_price[i] * (1 - self.cost_rate)
                 else:
                     self.position[i] = self.position[i - 1] - 1
-                    self.money[i] = self.money[i - 1] + self.bid_price[i] * (1 - self.cost_rate)
+                    self.money[i] = self.money[i - 1] + self.ask_price[i] * (1 - self.cost_rate)
+                self.wealth[i] = self.money[i] + self.position[i]*self.ask_price[i]
+                
 
             # no action
             else:
                 self.money[i] = self.money[i - 1]
                 self.position[i] = self.position[i - 1]
-
-            # calculate the net value at each time spot
-            if self.position[i] >= 0:
-                self.wealth[i] = self.money[i] + self.position[i] * self.ask_price[i]
-            else:
-                self.wealth[i] = self.money[i] + self.position[i] * self.bid_price[i]
-
+                self.wealth[i] = self.money[i] + self.position[i]*self.mid_price[i]
+        
             self.ret_strat[i] = self.wealth[i] / self.cash0 - 1
-
-        # tackle the problem when there is 0 price in both bid_px1 or ask_px1
-        self.ret_strat[self.ret_strat == -1] = np.nan
-        self.ret_strat = pd.Series(self.ret_strat).ffill().values
-
-        return self.ret_strat
+                
+        return self.ret_strat[ini_buy:]
 
     def get_position(self):
         return self.position
@@ -98,34 +102,32 @@ class SimpleStrategy:
 
 
 def plot(d):
-    ret_stra = SimpleStrategy(np.array(d['ask_px1']), np.array(d['bid_px1']), np.array(d['pred']))
+    ret_stra = SimpleStrategy(np.array(d['bid_px1']), np.array(d['ask_px1']), np.array(d['pred']))
 
     fig = plt.figure(figsize=(15, 10))
-    plt.plot(ret_stra.get_ret(cost_rate=0), label='No transaction cost')
+    plt.plot(ret_stra.get_ret(cost_rate=0)[:5000], label='No transaction cost')
     ret_stra.flush()
-    plt.plot(ret_stra.get_ret(cost_rate=.0001), label='Transaction cost = 0.01%')
+    plt.plot(ret_stra.get_ret(cost_rate=.0001)[:5000], label='Transaction cost = 0.01%')
     ret_stra.flush()
-    plt.plot(ret_stra.get_ret(cost_rate=.0005), label='Transaction cost = 0.05%')
+    plt.plot(ret_stra.get_ret(cost_rate=.0005)[:5000], label='Transaction cost = 0.05%')
     ret_stra.flush()
-    plt.plot(ret_stra.get_ret(cost_rate=.001), label='Transaction cost = 0.1%')
+    plt.plot(ret_stra.get_ret(cost_rate=.001)[:5000], label='Transaction cost = 0.1%')
+    plt.grid()
+    plt.legend()
+    
+    ret_stra.flush()
+    
+    fig = plt.figure(figsize=(15, 10))
+    plt.plot(ret_stra.get_ret(cost_rate=0, method=2)[:5000], label='No transaction cost')
+    ret_stra.flush()
+    plt.plot(ret_stra.get_ret(cost_rate=.0001, method=2)[:5000], label='Transaction cost = 0.01%')
+    ret_stra.flush()
+    plt.plot(ret_stra.get_ret(cost_rate=.0005, method=2)[:5000], label='Transaction cost = 0.05%')
+    ret_stra.flush()
+    plt.plot(ret_stra.get_ret(cost_rate=.001, method=2)[:5000], label='Transaction cost = 0.1%')
     plt.grid()
     plt.legend()
     plt.show()
-
-    ret_stra.flush()
-
-    fig = plt.figure(figsize=(15, 10))
-    plt.plot(ret_stra.get_ret(cost_rate=0, method=2), label='No transaction cost')
-    ret_stra.flush()
-    plt.plot(ret_stra.get_ret(cost_rate=.0001, method=2), label='Transaction cost = 0.01%')
-    ret_stra.flush()
-    plt.plot(ret_stra.get_ret(cost_rate=.0005, method=2), label='Transaction cost = 0.05%')
-    ret_stra.flush()
-    plt.plot(ret_stra.get_ret(cost_rate=.001, method=2), label='Transaction cost = 0.1%')
-    plt.grid()
-    plt.legend()
-    plt.show()
-
 
 def strategy_performance(model, order_book_df, transaction_df, window_size=10, mid_price_window=5, lag=50):
     f = features.all_features(order_book_df, transaction_df, lag)[lag - 1:].ffill().bfill().reset_index(drop=True) #iloc is to remove bid_size1, ask_size1 from the generated features to accomodate the model used in RNNModel_tf2's main()
@@ -147,15 +149,8 @@ def strategy_performance(model, order_book_df, transaction_df, window_size=10, m
     )
     return d
 
-if __name__ == "__main__":
-    '''
-    tested with data in the Data\orderbook.csv
-    '''
-    df = pd.read_csv(r"C:\Users\Administrator\Desktop\DeepLearningProject\Data\orderbook.csv")
-    d = pd.DataFrame(
-       {"bid_px1": df["bid_px1"], "ask_px1": df["ask_px1"], "pred": np.random.choice([-1, 1], len(df["bid_px1"]))})
 
-    plot(d)
-
+    
+    
 
 
