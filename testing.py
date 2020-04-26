@@ -29,7 +29,7 @@ for (learning_rate, model_type, input_type, use_pca) in configs:
     output_dir = './logs/{}_{}_{}'.format(symbol, num_hidden, learning_rate)
     file_prefix = '{}/{}_{}_{}'.format(output_dir, model_type, input_type, use_pca)
     os.makedirs(output_dir, exist_ok=True)
-    sys.stdout = open('{}/{}_{}.log'.format(output_dir, model_type, input_type), 'w')
+    sys.stdout = open('{}.log'.format(file_prefix), 'w')
 
     ob_file = './data/{}_order_book.csv'.format(symbol)
     trx_file = './data/{}_transaction.csv'.format(symbol)
