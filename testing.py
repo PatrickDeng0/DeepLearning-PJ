@@ -12,19 +12,18 @@ import OButil
 import RNNModel_tf2
 import features
 
-symbols = ['AAPL', 'AMD', 'GE', 'C']
-learning_rates = [0.0001, 0.0005, 0.001]
-nums_hidden = [32, 64]
+#symbols = ['AAPL', 'AMD', 'GE', 'C']
+symbol = sys.argv[1]
+learning_rates = [0.0001, 0.001, 0.01]
+num_hidden = 64
 model_types = ['LSTMs', 'GRUs']
 input_types = ['ob', 'obn', 'obf', 'obfn']
-n_epoch = 100
+n_epoch = 150
 batch_size = 512
 lag = 50
 
-configs = np.array(np.meshgrid(symbols, nums_hidden, learning_rates, model_types, input_types)).T.reshape(-1, 5)
-
-for (symbol, num_hidden, learning_rate, model_type, input_type) in configs:
-    num_hidden = int(num_hidden)
+configs = np.array(np.meshgrid(learning_rates, model_types, input_types)).T.reshape(-1, 3)
+for (learning_rate, model_type, input_type) in configs:
     learning_rate = float(learning_rate)
     output_dir = './logs/{}_{}_{}'.format(symbol, num_hidden, learning_rate)
     os.makedirs(output_dir, exist_ok=True)
