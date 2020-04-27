@@ -140,7 +140,6 @@ class FullModel:
         start_time = time.time()
 
         for epoch in range(num_epoch):
-            print("Starting epoch {}".format(epoch))
             for batch_X, batch_Y in get_batch(shuffled_X, shuffled_Y, batch_size):
                 with tf.GradientTape() as tape:
                     loss = tf.nn.sparse_softmax_cross_entropy_with_logits(batch_Y, self.fwd(batch_X))
