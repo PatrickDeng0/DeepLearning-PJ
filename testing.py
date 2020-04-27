@@ -14,8 +14,8 @@ import features
 
 symbol = sys.argv[1]
 learning_rate = 0.001
-num_hidden = 64
-model_type = 'LSTMs'
+num_hidden = 32
+model_type = 'LSTM'
 input_type = 'ob'
 use_pca = 'pca'
 mid_price_windows = [1, 3, 5]
