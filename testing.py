@@ -35,6 +35,7 @@ lag = 50
 output_dir = './logs/{}'.format(symbol)
 file_prefix = '{}/{}_{}_{}'.format(output_dir, model_type, input_type, mid_price_window)
 os.makedirs(output_dir, exist_ok=True)
+os.makedirs(file_prefix, exist_ok=True)
 
 ob_file = './data/{}_order_book.csv'.format(symbol)
 trx_file = './data/{}_transaction.csv'.format(symbol)
@@ -51,7 +52,7 @@ else:
     X = pd.concat([transaction, order_book], axis=1)
 
 X, Y = OButil.convert_to_dataset(X, window_size=10, mid_price_window=mid_price_window)
-X.astype('float32')
+X = X.astype('float32')
 if input_type in ['obfn', 'obn']:
     X[:, :, -20:] = OButil.OBnormal(X[:, :, -20:])
 X, Y = OButil.over_sample(X, Y)
@@ -67,8 +68,8 @@ if use_pca == 'pca':
     train_X = transform_pc(train_X, pca, ss, train=True)
     valid_X = transform_pc(valid_X, pca, ss)
     test_X = transform_pc(test_X, pca, ss)
-    joblib.dump(pca, '{}_pca.joblib'.format(file_prefix))
-    joblib.dump(ss, '{}_ss.joblib'.format(file_prefix))
+    joblib.dump(pca, '{}/pca.joblib'.format(file_prefix))
+    joblib.dump(ss, '{}/ss.joblib'.format(file_prefix))
 
 
 # Able to train CNNLSTM
