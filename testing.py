@@ -13,6 +13,7 @@ import RNNModel_tf2
 import features
 
 symbol = sys.argv[1]
+mid_price_windows = [int(w) for w in sys.argv[2].split(',')]
 learning_rate = 0.001
 num_hidden = 64
 model_type = 'LSTM'
