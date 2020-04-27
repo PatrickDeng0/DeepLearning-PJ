@@ -128,7 +128,9 @@ class FullModel:
 
     def evaluate(self, X, Y):
         pred = self.predict(X)
-        return (pred == Y).mean()
+        acc = (pred == Y).mean()
+        print("Out-of-sample accuracy:", acc)
+        return acc
 
     # train_data: tf.dataset object
     # valid_data: numpy object. For convenience in strategy
