@@ -28,7 +28,6 @@ for mid_price_window in mid_price_windows:
     output_dir = './logs/{}'.format(symbol)
     file_prefix = '{}/{}'.format(output_dir, mid_price_window)
     os.makedirs(output_dir, exist_ok=True)
-    sys.stdout = open('{}.log'.format(file_prefix), 'w')
 
     ob_file = './data/{}_order_book.csv'.format(symbol)
     trx_file = './data/{}_transaction.csv'.format(symbol)
@@ -89,4 +88,3 @@ for mid_price_window in mid_price_windows:
 
     print("Total time: {0:.3f} seconds".format(time.time() - start_time))
 
-    sys.stdout.close()
