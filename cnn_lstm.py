@@ -138,8 +138,7 @@ class FullModel:
         train_X, train_Y = train_data
         shuffled_X, shuffled_Y = shuffle(train_X, train_Y)
         start_time = time.time()
-        # Every 10% of the training epochs, print validation result
-        show_step = int(num_epoch // 20)
+
         for epoch in range(num_epoch):
             print("Starting epoch {}".format(epoch))
             for batch_X, batch_Y in get_batch(shuffled_X, shuffled_Y, batch_size):
@@ -149,7 +148,7 @@ class FullModel:
                 grads = tape.gradient(loss, self.get_vars())
                 self.optimizer.apply_gradients(zip(grads, self.get_vars()))
 
-            if valid_data is not None and epoch % show_step == 0:
+            if valid_data is not None:
                 valid_X, valid_Y = valid_data
                 print("Epoch {}: Train acc: {}, Validation acc: {}".
                       format(epoch, self.evaluate(train_X, train_Y), self.evaluate(valid_X, valid_Y)))
