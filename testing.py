@@ -67,8 +67,8 @@ if use_pca == 'pca':
     train_X = transform_pc(train_X, pca, ss, train=True)
     valid_X = transform_pc(valid_X, pca, ss)
     test_X = transform_pc(test_X, pca, ss)
-    joblib.dump(pca, file_prefix + '/pca.joblib')
-    joblib.dump(ss, file_prefix + '/ss.joblib')
+    joblib.dump(pca, '{}_pca.joblib'.format(file_prefix))
+    joblib.dump(ss, '{}_ss.joblib'.format(file_prefix))
 
 
 # Able to train CNNLSTM
