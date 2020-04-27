@@ -68,7 +68,7 @@ for mid_price_window in mid_price_windows:
 
 
     if use_pca == 'pca':
-        pca = PCA(n_components=0.99)
+        pca = PCA(n_components=0.95)
         ss = StandardScaler()
         train_X = transform_pc(train_X, pca, ss, train=True)
         valid_X = transform_pc(valid_X, pca, ss)
