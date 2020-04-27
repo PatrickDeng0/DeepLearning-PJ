@@ -78,7 +78,7 @@ class RNNModel:
 
 def main():
     n_epoch = 50
-    batch_size = 512
+    batch_size = 128
     lag = 50
 
     quote_dir = './data/quote_intc_110816.csv'
@@ -105,7 +105,7 @@ def main():
     train_X, valid_X, train_Y, valid_Y = train_test_split(train_X, train_Y, test_size=0.1)
 
     # Preprocessing
-    pca = PCA(n_components=0.99)
+    pca = PCA(n_components=0.95)
     ss = StandardScaler()
 
     def Preprocessing(train_X, pca, ss, train=False):
@@ -129,7 +129,7 @@ def main():
 
     # Build model and train
     rnn = RNNModel(input_shape=train_X[0].shape, learning_rate=0.001, num_hidden=64,
-                   method='LSTMs', output_size=3)
+                   method='LSTM', output_size=3)
     rnn.train(train_data, valid_data, n_epoch=n_epoch)
 
     rnn.evaluate(test_data)

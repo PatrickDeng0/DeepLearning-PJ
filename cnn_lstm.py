@@ -1,12 +1,8 @@
 import time
-
 import numpy as np
-import pandas as pd
 import tensorflow as tf
-from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
 from tensorflow.keras.layers import Dense, Bidirectional, LSTM
-
-import OButil as ob
 
 
 def init_weights(shape, name):
@@ -97,9 +93,9 @@ class RNNModule:
         input_shape = inp.shape[1:]
         if self.model is None:
             self.model = tf.keras.models.Sequential([
-                Bidirectional(LSTM(self.num_hidden, return_sequences=True), input_shape=input_shape),
-                Bidirectional(LSTM(self.num_hidden)),
-                Dense(self.output_size)
+                Bidirectional(LSTM(self.num_hidden), input_shape=input_shape),
+                Dense(self.num_hidden, activation='relu'),
+                Dense(self.output_size, activation='softmax')
             ])
 
         return self.model(inp)
@@ -109,12 +105,15 @@ class RNNModule:
 
 
 class FullModel:
-    def __init__(self, leaky_relu_alpha, num_hidden, output_size):
+    def __init__(self, learning_rate, num_hidden=3, leaky_relu_alpha=0.1, output_size=3):
         self.conv = ConvModule([[1, 2, 1, 16], [1, 2, 16, 16], [1, 5, 16, 16]], leaky_relu_alpha)
         self.inc = InceptionModule(leaky_relu_alpha)
         self.rnn = RNNModule(num_hidden, output_size)
+        self.optimizer = tf.optimizers.Adam(learning_rate)
 
-    def fwd(self, order_book_batch, other_features):
+    def fwd(self, X):
+        order_book_batch = X[:, :, -20:]
+        other_features = X[:, :, :-20]
         o = order_book_batch.reshape([*order_book_batch.shape, 1])
         c = self.conv.fwd(o)
         c = self.inc.fwd(c)
@@ -124,57 +123,38 @@ class FullModel:
     def get_vars(self):
         return self.conv.get_variables() + self.inc.get_variables() + self.rnn.get_variables()
 
+    def predict(self, X):
+        return np.argmax(self.fwd(X), axis=1)
 
-if __name__ == "__main__":
-    out_order_book_filename = './data/order_book.csv'
-    out_transaction_filename = './data/transaction.csv'
-    # stored results from auto_features.py
-    auto_features_filename = "./data/raw_features.csv"
-    lag = 50
+    def evaluate(self, X, Y):
+        pred = self.predict(X)
+        return (pred == Y).mean()
 
-    order_book_df = pd.read_csv(out_order_book_filename)[lag - 1:].reset_index(drop=True)
-    transaction_df = pd.read_csv(out_transaction_filename)[lag - 1:].reset_index(drop=True)
-    f = pd.read_csv(auto_features_filename, index_col=0)[lag - 1:].reset_index(drop=True)
+    # train_data: tf.dataset object
+    # valid_data: numpy object. For convenience in strategy
+    def train(self, train_data, valid_data=None, num_epoch=100, batch_size=128):
+        train_X, train_Y = train_data
+        shuffled_X, shuffled_Y = shuffle(train_X, train_Y)
+        start_time = time.time()
+        # Every 10% of the training epochs, print validation result
+        show_step = int(num_epoch // 20)
+        for epoch in range(num_epoch):
+            print("Starting epoch {}".format(epoch))
+            for batch_X, batch_Y in get_batch(shuffled_X, shuffled_Y, batch_size):
+                with tf.GradientTape() as tape:
+                    loss = tf.nn.sparse_softmax_cross_entropy_with_logits(batch_Y, self.fwd(batch_X))
+                    loss = tf.reduce_mean(loss)
+                grads = tape.gradient(loss, self.get_vars())
+                self.optimizer.apply_gradients(zip(grads, self.get_vars()))
 
-    X = pd.concat([transaction_df, f, order_book_df], axis=1)
-    X, Y = ob.convert_to_dataset(X, window_size=10, mid_price_window=1)
+            if valid_data is not None and epoch % show_step == 0:
+                valid_X, valid_Y = valid_data
+                print("Epoch {}: Train acc: {}, Validation acc: {}".
+                      format(epoch, self.evaluate(train_X, train_Y), self.evaluate(valid_X, valid_Y)))
+        print("Total time lapse: {0:.3f} seconds".format(time.time() - start_time))
 
-    # Add orderbook normalize to X, replace the -20 to -1 location of X
-    X[:,:,-20:] = ob.OBnormal(X[:,:,-20:])
 
-    X, Y = ob.over_sample(X, Y)
-    X = tf.cast(X, dtype=tf.float32).numpy()
-    Y = tf.one_hot(Y, depth=3).numpy()
-    leaky_alpha = 0.01
-    learning_rate = 0.0001
-    training_epochs = 500
-    batch_size = 512
-
-    train_X, test_X, train_Y, test_Y = train_test_split(X, Y, test_size=0.1)
-    splits = np.arange(batch_size, len(train_X), batch_size)
-    train_X_batches = np.split(train_X, splits)
-    train_Y_batches = np.split(train_Y, splits)
-
-    m = FullModel(leaky_alpha, 64, 3)
-
-    optimizer = tf.optimizers.Adam(learning_rate)
-
-    results = np.zeros(training_epochs)
-    start_time = time.time()
-    for epoch in range(training_epochs):
-        print("Starting epoch {}".format(epoch))
-        for train_x, labels in zip(train_X_batches, train_Y_batches):
-            with tf.GradientTape() as tape:
-                loss = tf.nn.softmax_cross_entropy_with_logits(labels, m.fwd(train_x[:, :, -20:], train_x[:, :, :-20]))
-                loss = tf.reduce_mean(loss)
-            grads = tape.gradient(loss, m.get_vars())
-            optimizer.apply_gradients(zip(grads, m.get_vars()))
-
-        pred = np.argmax(m.fwd(test_X[:, :, :20], test_X[:, :, 20:]), axis=1)
-        actual = np.argmax(test_Y, axis=1)
-        acc = (pred == actual).mean()
-        print("Out-of-sample accuracy: {}".format(acc))
-        results[epoch] = acc
-
-    print("Total time lapse: {0:.3f} seconds".format(time.time() - start_time))
-    pd.DataFrame(results, columns=['acc']).to_csv('multimodal_results.csv')
+def get_batch(X, Y, batch_size):
+    nums = X.shape[0]
+    for i in range(nums // batch_size):
+        yield X[i*batch_size : (i+1)*batch_size], Y[i*batch_size : (i+1)*batch_size]
