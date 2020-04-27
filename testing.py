@@ -14,10 +14,13 @@ import RNNModel_tf2
 import features
 
 symbol = sys.argv[1]
-learning_rates = [0.0001, 0.001, 0.01]
+# learning_rates = [0.0001, 0.001, 0.01]
+learning_rates = [0.001]
 num_hidden = 64
-model_types = ['LSTMs', 'GRUs']
-input_types = ['ob', 'obn', 'obf', 'obfn']
+# model_types = ['LSTMs', 'GRUs']
+model_types = ['LSTMs']
+# input_types = ['ob', 'obn', 'obf', 'obfn']
+input_types = ['ob', 'obf']
 pca_choices = ['pca', 'nopca']
 n_epoch = 150
 batch_size = 256
