@@ -2,7 +2,6 @@ import os
 import sys
 import time
 
-import numpy as np
 import pandas as pd
 import tensorflow as tf
 from sklearn.decomposition import PCA
@@ -14,23 +13,20 @@ import RNNModel_tf2
 import features
 
 symbol = sys.argv[1]
-# learning_rates = [0.0001, 0.001, 0.01]
-learning_rates = [0.001]
+learning_rate = 0.001
 num_hidden = 64
-# model_types = ['LSTMs', 'GRUs']
-model_types = ['LSTMs']
-# input_types = ['ob', 'obn', 'obf', 'obfn']
-input_types = ['ob', 'obf']
-pca_choices = ['pca', 'nopca']
+model_type = 'LSTMs'
+input_type = 'ob'
+use_pca = 'pca'
+mid_price_windows = [1, 3, 5]
+
 n_epoch = 150
-batch_size = 256
+batch_size = 128
 lag = 50
 
-configs = np.array(np.meshgrid(learning_rates, model_types, input_types, pca_choices)).T.reshape(-1, 4)
-for (learning_rate, model_type, input_type, use_pca) in configs:
-    learning_rate = float(learning_rate)
-    output_dir = './logs/{}_{}_{}'.format(symbol, num_hidden, learning_rate)
-    file_prefix = '{}/{}_{}_{}'.format(output_dir, model_type, input_type, use_pca)
+for mid_price_window in mid_price_windows:
+    output_dir = './logs/{}'.format(symbol)
+    file_prefix = '{}/{}'.format(output_dir, mid_price_window)
     os.makedirs(output_dir, exist_ok=True)
     sys.stdout = open('{}.log'.format(file_prefix), 'w')
 
@@ -48,7 +44,7 @@ for (learning_rate, model_type, input_type, use_pca) in configs:
     else:
         X = pd.concat([transaction, order_book], axis=1)
 
-    X, Y = OButil.convert_to_dataset(X, window_size=10, mid_price_window=1)
+    X, Y = OButil.convert_to_dataset(X, window_size=10, mid_price_window=mid_price_window)
     if input_type in ['obfn', 'obn']:
         X[:, :, -20:] = OButil.OBnormal(X[:, :, -20:])
     X, Y = OButil.over_sample(X, Y)
