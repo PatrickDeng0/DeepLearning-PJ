@@ -1,10 +1,12 @@
-import os, sys, time, joblib
+import joblib
+import sys
+
 import pandas as pd
 import tensorflow as tf
-from sklearn.decomposition import PCA
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-import OButil, RNNModel_tf2, features, cnn_lstm, train
+
+import features
+import ob_util
+import train
 
 
 def load_model(path):
@@ -46,9 +48,9 @@ def main():
         del order_book
         del transaction
 
-    X, Y = OButil.convert_to_dataset(X, window_size=x_window, mid_price_window=mid_price_window)
+    X, Y = ob_util.convert_to_dataset(X, window_size=x_window, mid_price_window=mid_price_window)
     if input_type in ['obfn', 'obn']:
-        X[:, :, -20:] = OButil.OBnormal(X[:, :, -20:])
+        X[:, :, -20:] = ob_util.OBnormal(X[:, :, -20:])
 
     X = train.transform_pc(X, pca, ss)
     test_X = tf.data.Dataset.from_tensor_slices((X, Y)).batch(batch_size=batch_size)

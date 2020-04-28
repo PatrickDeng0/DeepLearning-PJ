@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import copy
 import features
-import OButil as ob
+import ob_util as ob
 
 class SimpleStrategy:
     def __init__(self, bid_price, ask_price, pred):

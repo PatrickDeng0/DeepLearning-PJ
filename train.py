@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-import OButil, RNNModel_tf2, features, cnn_lstm
+import ob_util, rnn_model, features, cnn_lstm
 
 
 def transform_pc(train_x, pca_model, scaler, train=False):
@@ -22,7 +22,6 @@ def transform_pc(train_x, pca_model, scaler, train=False):
 
 def main():
     num_hidden = 64
-    use_pca = 'pca'
 
     n_epoch = 150
     batch_size = 128
@@ -56,12 +55,12 @@ def main():
         del order_book
         del transaction
 
-    X, Y = OButil.convert_to_dataset(X, window_size=x_window, mid_price_window=mid_price_window)
+    X, Y = ob_util.convert_to_dataset(X, window_size=x_window, mid_price_window=mid_price_window)
     if input_type in ['obfn', 'obn']:
-        X[:, :, -20:] = OButil.OBnormal(X[:, :, -20:])
+        X[:, :, -20:] = ob_util.OBnormal(X[:, :, -20:])
 
     # Instead of Oversample, we use different loss weight to balance the loss function
-    # X, Y = OButil.over_sample(X, Y)
+    # X, Y = ob_util.over_sample(X, Y)
     results, counts = np.unique(Y, return_counts=True)
     max_count = np.max(counts)
     class_weight = {}
@@ -74,7 +73,8 @@ def main():
     train_X, test_X, train_Y, test_Y = train_test_split(X, Y, test_size=0.1)
     train_X, valid_X, train_Y, valid_Y = train_test_split(train_X, train_Y, test_size=0.1)
 
-    if use_pca == 'pca':
+    # only apply pca when features are included
+    if input_type in ['obf', 'obfn']:
         pca = PCA(n_components=0.95)
         ss = StandardScaler()
         train_X = transform_pc(train_X, pca, ss, train=True)
@@ -83,8 +83,6 @@ def main():
         joblib.dump(pca, '{}/pca.joblib'.format(file_prefix))
         joblib.dump(ss, '{}/ss.joblib'.format(file_prefix))
 
-
-    # Able to train CNNLSTM
     if model_type == 'CNNLSTM':
         model = cnn_lstm.FullModel(learning_rate=learning_rate, num_hidden=num_hidden, leaky_relu_alpha=0.1, output_size=3)
         model.train(train_data=(train_X, train_Y), valid_data=(valid_X, valid_Y), num_epoch=n_epoch, batch_size=batch_size)
@@ -97,9 +95,9 @@ def main():
         test_data = tf.data.Dataset.from_tensor_slices((test_X, test_Y)).batch(batch_size=batch_size)
 
         # Build model and train
-        model = RNNModel_tf2.RNNModel(input_shape=train_X[0].shape, learning_rate=learning_rate,
-                                      num_hidden=num_hidden, method=model_type, output_size=3,
-                                      log_files_path=file_prefix)
+        model = rnn_model.RNNModel(input_shape=train_X[0].shape, learning_rate=learning_rate,
+                                   num_hidden=num_hidden, method=model_type, output_size=3,
+                                   log_files_path=file_prefix)
         model.train(train_data, valid_data, n_epoch=n_epoch, class_weight=class_weight)
 
         print("Evaluating the model")
