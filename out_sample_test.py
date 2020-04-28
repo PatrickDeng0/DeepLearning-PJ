@@ -46,7 +46,7 @@ def main():
         del order_book
         del transaction
 
-    X, Y = OButil.convert_to_dataset(X, window_size=10, mid_price_window=mid_price_window)
+    X, Y = OButil.convert_to_dataset(X, window_size=x_window, mid_price_window=mid_price_window)
     X = X.astype('float32')
     if input_type in ['obfn', 'obn']:
         X[:, :, -20:] = OButil.OBnormal(X[:, :, -20:])
