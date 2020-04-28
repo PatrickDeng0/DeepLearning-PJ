@@ -3,6 +3,7 @@ import time
 
 import pandas as pd
 import tensorflow as tf
+from tensorflow.keras.callbacks import EarlyStopping
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -64,8 +65,9 @@ class RNNModel:
         return model
 
     def train(self, train_data, valid_data, n_epoch):
+        es = EarlyStopping(monitor='val_loss', mode='min', patience=8, verbose=2)
         log_files_path = self._log_files_path
-        history = self._model.fit(train_data, validation_data=valid_data, epochs=n_epoch, verbose=2)
+        history = self._model.fit(train_data, validation_data=valid_data, epochs=n_epoch, verbose=2, callbacks=[es])
         self._model.save(log_files_path)
         return history
 
