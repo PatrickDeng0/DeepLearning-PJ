@@ -24,7 +24,7 @@ def main():
     num_hidden = 64
 
     n_epoch = 150
-    batch_size = 128
+    batch_size = 256
     lag = 50
 
     output_dir = './logs/{}'.format(symbol)
@@ -33,29 +33,38 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(file_prefix, exist_ok=True)
 
-    ob_file = './data/{}_order_book.csv'.format(symbol)
-    trx_file = './data/{}_transaction.csv'.format(symbol)
+    raw_data_dir = './data/{}'.format(symbol)
+    num_files = len([fn for fn in os.listdir(raw_data_dir) if '.csv' in fn]) / 2
 
-    order_book = pd.read_csv(ob_file)
-    transaction = pd.read_csv(trx_file)
+    X, Y = None, None
+    for i in range(int(num_files)):
+        order_book = pd.read_csv('{}/ob_{}.csv'.format(raw_data_dir, i))
+        transaction = pd.read_csv('{}/trx_{}.csv'.format(raw_data_dir, i))
 
-    if input_type in ['obf', 'obfn']:
-        f = features.all_features(order_book, transaction, lag)[lag - 1:]
-        f.ffill(inplace=True)
-        f.bfill(inplace=True)
-        f.reset_index(drop=True, inplace=True)
-        order_book = order_book[lag - 1:].reset_index(drop=True)
-        transaction = transaction[lag - 1:].reset_index(drop=True)
-        X = pd.concat([transaction, f, order_book], axis=1)
-        del f
-        del order_book
-        del transaction
-    else:
-        X = pd.concat([transaction, order_book], axis=1)
-        del order_book
-        del transaction
+        if input_type in ['obf', 'obfn']:
+            f = features.all_features(order_book, transaction, lag)[lag - 1:]
+            f.ffill(inplace=True)
+            f.bfill(inplace=True)
+            f.reset_index(drop=True, inplace=True)
+            order_book = order_book[lag - 1:].reset_index(drop=True)
+            transaction = transaction[lag - 1:].reset_index(drop=True)
+            x = pd.concat([transaction, f, order_book], axis=1)
+            del f
+            del order_book
+            del transaction
+        else:
+            x = pd.concat([transaction, order_book], axis=1)
+            del order_book
+            del transaction
 
-    X, Y = ob_util.convert_to_dataset(X, window_size=x_window, mid_price_window=mid_price_window)
+        x, y = ob_util.convert_to_dataset(x, window_size=x_window, mid_price_window=mid_price_window)
+        if X is None or Y is None:
+            X, Y = x, y
+        else:
+            X = np.concatenate([X, x])
+            Y = np.concatenate([Y, y])
+
+
     if input_type in ['obfn', 'obn']:
         X[:, :, -20:] = ob_util.OBnormal(X[:, :, -20:])
 
@@ -84,8 +93,10 @@ def main():
         joblib.dump(ss, '{}/ss.joblib'.format(file_prefix))
 
     if model_type == 'CNNLSTM':
-        model = cnn_lstm.FullModel(learning_rate=learning_rate, num_hidden=num_hidden, leaky_relu_alpha=0.1, output_size=3)
-        model.train(train_data=(train_X, train_Y), valid_data=(valid_X, valid_Y), num_epoch=n_epoch, batch_size=batch_size)
+        model = cnn_lstm.FullModel(learning_rate=learning_rate, num_hidden=num_hidden, leaky_relu_alpha=0.1,
+                                   output_size=3)
+        model.train(train_data=(train_X, train_Y), valid_data=(valid_X, valid_Y), num_epoch=n_epoch,
+                    batch_size=batch_size)
         print("Evaluating the model, acc:", model.evaluate(test_X, test_Y))
 
     # Traditional RNN models
