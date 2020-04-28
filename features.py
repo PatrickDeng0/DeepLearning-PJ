@@ -200,8 +200,8 @@ def volume_rank(order_book_df, lag=50):
         rank_ask_vol = order_book_df['ask_sz{}'.format(i)].rolling(lag, min_periods=1).apply(roll_rank, raw=True)
         rank_bid_vol = order_book_df['bid_sz{}'.format(i)].rolling(lag, min_periods=1).apply(roll_rank, raw=True)
 
-        rank_ask_vol = rank_ask_vol.fillna(method='ffill', axis=0)
-        rank_bid_vol = rank_bid_vol.fillna(method='ffill', axis=0)
+        rank_ask_vol.fillna(method='ffill', axis=0, inplace=True)
+        rank_bid_vol.fillna(method='ffill', axis=0, inplace=True)
         rank_ask_vol = np.clip(rank_ask_vol, 0, 1)
         rank_bid_vol = np.clip(rank_bid_vol, 0, 1)
 

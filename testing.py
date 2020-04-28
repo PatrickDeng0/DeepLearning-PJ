@@ -40,16 +40,24 @@ os.makedirs(file_prefix, exist_ok=True)
 ob_file = './data/{}_order_book.csv'.format(symbol)
 trx_file = './data/{}_transaction.csv'.format(symbol)
 
-order_book = pd.read_csv(ob_file)[lag - 1:].reset_index(drop=True)
-transaction = pd.read_csv(trx_file)[lag - 1:].reset_index(drop=True)
+order_book = pd.read_csv(ob_file)
+transaction = pd.read_csv(trx_file)
 
 if input_type in ['obf', 'obfn']:
-    f = features.all_features(order_book, transaction, lag)[lag - 1:].ffill().bfill().reset_index(drop=True)
-    o = order_book[lag - 1:].reset_index(drop=True)
-    t = transaction[lag - 1:].reset_index(drop=True)
-    X = pd.concat([t, f, o], axis=1)
+    f = features.all_features(order_book, transaction, lag)[lag - 1:]
+    f.ffill(inplace=True)
+    f.bfill(inplace=True)
+    f.reset_index(drop=True, inplace=True)
+    order_book = order_book[lag - 1:].reset_index(drop=True)
+    transaction = transaction[lag - 1:].reset_index(drop=True)
+    X = pd.concat([transaction, f, order_book], axis=1)
+    del f
+    del order_book
+    del transaction
 else:
     X = pd.concat([transaction, order_book], axis=1)
+    del order_book
+    del transaction
 
 X, Y = OButil.convert_to_dataset(X, window_size=10, mid_price_window=mid_price_window)
 X = X.astype('float32')
