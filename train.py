@@ -1,6 +1,7 @@
 import os, sys, time, joblib
 import pandas as pd
 import tensorflow as tf
+import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -56,10 +57,17 @@ def main():
         del transaction
 
     X, Y = OButil.convert_to_dataset(X, window_size=x_window, mid_price_window=mid_price_window)
-    X = X.astype('float32')
     if input_type in ['obfn', 'obn']:
         X[:, :, -20:] = OButil.OBnormal(X[:, :, -20:])
-    X, Y = OButil.over_sample(X, Y)
+
+    # Instead of Oversample, we use different loss weight to balance the loss function
+    # X, Y = OButil.over_sample(X, Y)
+    results, counts = np.unique(Y, return_counts=True)
+    max_count = np.max(counts)
+    class_weight = {}
+    for i in range(len(results)):
+        class_weight[results[i]] = max_count / counts[i]
+    print(class_weight)
 
     start_time = time.time()
 
@@ -80,8 +88,7 @@ def main():
     if model_type == 'CNNLSTM':
         model = cnn_lstm.FullModel(learning_rate=learning_rate, num_hidden=num_hidden, leaky_relu_alpha=0.1, output_size=3)
         model.train(train_data=(train_X, train_Y), valid_data=(valid_X, valid_Y), num_epoch=n_epoch, batch_size=batch_size)
-        print("Evaluating the model")
-        model.evaluate(test_X, test_Y)
+        print("Evaluating the model", model.evaluate(test_X, test_Y))
 
     # Traditional RNN models
     else:
@@ -93,7 +100,7 @@ def main():
         model = RNNModel_tf2.RNNModel(input_shape=train_X[0].shape, learning_rate=learning_rate,
                                       num_hidden=num_hidden, method=model_type, output_size=3,
                                       log_files_path=file_prefix)
-        model.train(train_data, valid_data, n_epoch=n_epoch)
+        model.train(train_data, valid_data, n_epoch=n_epoch, class_weight=class_weight)
 
         print("Evaluating the model")
         model.evaluate(test_data)

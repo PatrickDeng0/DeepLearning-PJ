@@ -64,10 +64,11 @@ class RNNModel:
                       metrics=['sparse_categorical_accuracy'])
         return model
 
-    def train(self, train_data, valid_data, n_epoch):
-        es = EarlyStopping(monitor='val_loss', mode='min', patience=8, verbose=2)
+    def train(self, train_data, valid_data, n_epoch, class_weight):
+        es = EarlyStopping(monitor='val_loss', mode='min', patience=5, verbose=2)
         log_files_path = self._log_files_path
-        history = self._model.fit(train_data, validation_data=valid_data, epochs=n_epoch, verbose=2, callbacks=[es])
+        history = self._model.fit(train_data, validation_data=valid_data, epochs=n_epoch, verbose=2,
+                                  callbacks=[es], class_weight=class_weight)
         self._model.save(log_files_path)
         return history
 

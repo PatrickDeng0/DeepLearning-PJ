@@ -46,11 +46,9 @@ def main():
         del order_book
         del transaction
 
-    X, Y = OButil.convert_to_dataset(X, window_size=10, mid_price_window=mid_price_window)
-    X = X.astype('float32')
+    X, Y = OButil.convert_to_dataset(X, window_size=x_window, mid_price_window=mid_price_window)
     if input_type in ['obfn', 'obn']:
         X[:, :, -20:] = OButil.OBnormal(X[:, :, -20:])
-    X, Y = OButil.over_sample(X, Y)
 
     X = train.transform_pc(X, pca, ss)
     test_X = tf.data.Dataset.from_tensor_slices((X, Y)).batch(batch_size=batch_size)

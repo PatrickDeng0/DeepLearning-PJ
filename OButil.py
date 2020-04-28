@@ -254,25 +254,26 @@ def convert_to_dataset(data_df, window_size=10, mid_price_window=5):
     # Compute Y moving average mid price
     Y_mid_prices = epochs_data[:, -mid_price_window:, -1]
     Y_mid_prices = np.mean(Y_mid_prices, axis=1)
-
     Y = Y_mid_prices - X_mid_prices
-    return X, Y
 
-
-def over_sample(X, Y):
     # A lot of Y is 0: so actually we need 3 labels: 0 as down, 1 as remain, 2 as up
     Y_bar = Y / np.abs(Y)
     Y_bar = np.nan_to_num(Y_bar, 0).astype(int) + 1
 
     # Reshape X for Oversampling, and then reshape back
     X_bar = np.nan_to_num(X, 0)
-    X_shape = X_bar.shape
-    X_bar = X_bar.reshape((X_shape[0], -1))
-    model_RandomUnderSampler = RandomOverSampler(sampling_strategy='all')
-    X_bar, Y_bar = model_RandomUnderSampler.fit_sample(X_bar, Y_bar)
-    X_bar = X_bar.reshape((-1, X_shape[1], X_shape[2]))
-
+    X_bar = X_bar.astype('float32')
     return X_bar, Y_bar
+
+
+def over_sample(X, Y):
+    X_shape = X.shape
+    X_bar = X.reshape((X_shape[0], -1))
+    model_RandomUnderSampler = RandomOverSampler(sampling_strategy='all')
+    X_bar, Y_bar = model_RandomUnderSampler.fit_sample(X_bar, Y)
+    X_bar = X_bar.reshape((-1, X_shape[1], X_shape[2]))
+    return X_bar, Y_bar
+
 
 def OBnormal(data_X):
     X_normal = data_X.copy()
