@@ -23,8 +23,9 @@ symbol = sys.argv[1]
 model_type = sys.argv[2]
 input_type = sys.argv[3]
 mid_price_window = int(sys.argv[4])
+x_window = int(sys.argv[5])
+learning_rate = float(sys.argv[6])
 
-learning_rate = 0.001
 num_hidden = 64
 use_pca = 'pca'
 
@@ -59,7 +60,7 @@ else:
     del order_book
     del transaction
 
-X, Y = OButil.convert_to_dataset(X, window_size=10, mid_price_window=mid_price_window)
+X, Y = OButil.convert_to_dataset(X, window_size=x_window, mid_price_window=mid_price_window)
 X = X.astype('float32')
 if input_type in ['obfn', 'obn']:
     X[:, :, -20:] = OButil.OBnormal(X[:, :, -20:])
