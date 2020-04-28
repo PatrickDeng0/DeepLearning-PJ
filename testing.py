@@ -34,7 +34,8 @@ batch_size = 128
 lag = 50
 
 output_dir = './logs/{}'.format(symbol)
-file_prefix = '{}/{}_{}_{}'.format(output_dir, model_type, input_type, mid_price_window)
+file_prefix = '{}/{}_{}_midwin{}_win{}_rate{}'.format(
+    output_dir, model_type, input_type, mid_price_window, x_window, learning_rate)
 os.makedirs(output_dir, exist_ok=True)
 os.makedirs(file_prefix, exist_ok=True)
 
