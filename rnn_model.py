@@ -57,7 +57,7 @@ class RNNModel:
         return model
 
     def train(self, train_data, valid_data, n_epoch, class_weight):
-        es = EarlyStopping(monitor='val_accuracy', mode='max', patience=10, verbose=2)
+        es = EarlyStopping(monitor='val_accuracy', mode='max', patience=5, verbose=2)
         log_files_path = self._log_files_path
         history = self._model.fit(train_data, validation_data=valid_data, epochs=n_epoch, verbose=2,
                                   callbacks=[es], class_weight=class_weight)
