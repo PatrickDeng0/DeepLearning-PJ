@@ -22,8 +22,8 @@ def main():
 
     # Model Restore
     output_dir = './logs/{}'.format(symbol)
-    file_prefix = '{}/{}_{}_midwin{}_win{}_rate{}'.format(
-        output_dir, model_type, input_type, mid_price_window, x_window, learning_rate)
+    file_prefix = '{}/{}_{}_midwin{}_win{}_rate{}_{}'.format(
+        output_dir, model_type, input_type, mid_price_window, x_window, learning_rate, use_pca)
     pca, ss, model = load_model(file_prefix)
 
     # Data Preprocessing of test dates
@@ -56,7 +56,7 @@ def main():
         X = train.transform_pc(X, pca, ss)
 
     test_X = tf.data.Dataset.from_tensor_slices((X, Y)).batch(batch_size=batch_size)
-    model.evaluate(test_X)
+    model.evaluate(test_X, verbose=2)
 
 
 if __name__ == '__main__':

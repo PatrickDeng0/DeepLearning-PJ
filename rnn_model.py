@@ -65,7 +65,7 @@ class RNNModel:
         return history
 
     def evaluate(self, test_data):
-        return self._model.evaluate(test_data)
+        return self._model.evaluate(test_data, verbose=2)
 
     def predict(self, test_X):
         return self._model.predict(test_X)
