@@ -74,7 +74,7 @@ def main():
     class_weight = {}
     for i in range(len(results)):
         class_weight[results[i]] = max_count / counts[i]
-    print(class_weight)
+    print("Class weights are:", class_weight)
 
     start_time = time.time()
 
