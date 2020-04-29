@@ -64,7 +64,6 @@ def main():
             X = np.concatenate([X, x])
             Y = np.concatenate([Y, y])
 
-
     if input_type in ['obfn', 'obn']:
         X[:, :, -20:] = ob_util.OBnormal(X[:, :, -20:])
 
@@ -82,15 +81,13 @@ def main():
     train_X, test_X, train_Y, test_Y = train_test_split(X, Y, test_size=0.1)
     train_X, valid_X, train_Y, valid_Y = train_test_split(train_X, train_Y, test_size=0.1)
 
-    # only apply pca when features are included
-    if input_type in ['obf', 'obfn']:
-        pca = PCA(n_components=0.95)
-        ss = StandardScaler()
-        train_X = transform_pc(train_X, pca, ss, train=True)
-        valid_X = transform_pc(valid_X, pca, ss)
-        test_X = transform_pc(test_X, pca, ss)
-        joblib.dump(pca, '{}/pca.joblib'.format(file_prefix))
-        joblib.dump(ss, '{}/ss.joblib'.format(file_prefix))
+    pca = PCA(n_components=0.95)
+    ss = StandardScaler()
+    train_X = transform_pc(train_X, pca, ss, train=True)
+    valid_X = transform_pc(valid_X, pca, ss)
+    test_X = transform_pc(test_X, pca, ss)
+    joblib.dump(pca, '{}/pca.joblib'.format(file_prefix))
+    joblib.dump(ss, '{}/ss.joblib'.format(file_prefix))
 
     if model_type == 'CNNLSTM':
         model = cnn_lstm.FullModel(learning_rate=learning_rate, num_hidden=num_hidden, leaky_relu_alpha=0.1,
