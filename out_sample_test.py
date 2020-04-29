@@ -10,8 +10,8 @@ import train
 
 
 def load_model(path):
-    pca = joblib.load(path+'/pca.joblib')
-    ss = joblib.load(path+'/ss.joblib')
+    pca = joblib.load(path + '/pca.joblib')
+    ss = joblib.load(path + '/ss.joblib')
     model = tf.keras.models.load_model(path)
     return pca, ss, model
 
@@ -52,7 +52,9 @@ def main():
     if input_type in ['obfn', 'obn']:
         X[:, :, -20:] = ob_util.OBnormal(X[:, :, -20:])
 
-    X = train.transform_pc(X, pca, ss)
+    if use_pca == 'pca':
+        X = train.transform_pc(X, pca, ss)
+
     test_X = tf.data.Dataset.from_tensor_slices((X, Y)).batch(batch_size=batch_size)
     model.evaluate(test_X)
 
@@ -64,5 +66,6 @@ if __name__ == '__main__':
     mid_price_window = int(sys.argv[4])
     x_window = int(sys.argv[5])
     learning_rate = float(sys.argv[6])
-    test_date = sys.argv[7]
+    use_pca = sys.argv[7]
+    test_date = sys.argv[8]
     main()
