@@ -1,16 +1,29 @@
-import os, sys, time, joblib
+import joblib
+import os
+import sys
+import time
+
+import numpy as np
 import pandas as pd
 import tensorflow as tf
-import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-import ob_util, rnn_model, features, cnn_lstm
+
+import cnn_lstm
+import features
+import ob_util
+import rnn_model
+
+num_hidden = 64
+n_epoch = 150
+batch_size = 256
+lag = 50
 
 
-def transform_pc(train_x, pca_model, scaler, train=False):
+def transform_pc(train_x, pca_model, scaler, training=False):
     x_shape = train_x.shape
-    if train:
+    if training:
         train_x = scaler.fit_transform(train_x.reshape(-1, x_shape[2]))
         train_x = pca_model.fit_transform(train_x)
     else:
@@ -20,72 +33,62 @@ def transform_pc(train_x, pca_model, scaler, train=False):
     return train_x
 
 
-def main():
-    num_hidden = 64
-    n_epoch = 150
-    batch_size = 256
-    lag = 50
+def load_data(raw_data_directory):
+    num_files = len([fn for fn in os.listdir(raw_data_directory) if '.csv' in fn]) / 2
 
-    output_dir = './logs/{}'.format(symbol)
-    file_prefix = '{}/{}_{}_midwin{}_xwin{}_rate{}_{}'.format(
-        output_dir, model_type, input_type, mid_price_window, x_window, learning_rate, use_pca)
-    os.makedirs(output_dir, exist_ok=True)
-    os.makedirs(file_prefix, exist_ok=True)
-
-    raw_data_dir = './data/{}'.format(symbol)
-    num_files = len([fn for fn in os.listdir(raw_data_dir) if '.csv' in fn]) / 2
-
-    X, Y = None, None
+    data_list = []
     for i in range(int(num_files)):
-        order_book = pd.read_csv('{}/ob_{}.csv'.format(raw_data_dir, i))
-        transaction = pd.read_csv('{}/trx_{}.csv'.format(raw_data_dir, i))
+        order_book = pd.read_csv('{}/ob_{}.csv'.format(raw_data_directory, i))
+        transaction = pd.read_csv('{}/trx_{}.csv'.format(raw_data_directory, i))
+        data_list.append(features.all_features(order_book, transaction, lag, include_ob=True))
 
-        if input_type in ['obf', 'obfn']:
-            x = features.all_features(order_book, transaction, lag, include_ob=True)
-        else:
-            x = pd.concat([transaction, order_book], axis=1)
+    return data_list
 
-        x, y = ob_util.convert_to_dataset(x, window_size=x_window, mid_price_window=mid_price_window)
+
+def convert_data(data_list, x_window, mid_price_window):
+    X, Y = None, None
+    for data in data_list:
+        x, y = ob_util.convert_to_dataset(data, window_size=x_window, mid_price_window=mid_price_window)
         if X is None or Y is None:
             X, Y = x, y
         else:
             X = np.concatenate([X, x])
             Y = np.concatenate([Y, y])
+    return X, Y
 
-    if input_type in ['obfn', 'obn']:
-        X[:, :, -20:] = ob_util.normalize_ob(X[:, :, -20:])
 
-    # Instead of Oversample, we use different loss weight to balance the loss function
-    # X, Y = ob_util.over_sample(X, Y)
+def get_class_weight(Y):
     results, counts = np.unique(Y, return_counts=True)
     max_count = np.max(counts)
-    class_weight = {}
+    ret = {}
     for i in range(len(results)):
-        class_weight[results[i]] = max_count / counts[i]
-    print("Class weights are:", class_weight)
+        ret[results[i]] = max_count / counts[i]
+    print("Class weights are:", ret)
+    return ret
 
-    start_time = time.time()
 
+def train(X, Y, model_type, learning_rate, file_prefix):
+    class_weight = get_class_weight(Y)
     train_X, test_X, train_Y, test_Y = train_test_split(X, Y, test_size=0.1)
     train_X, valid_X, train_Y, valid_Y = train_test_split(train_X, train_Y, test_size=0.1)
 
-    if use_pca == 'pca':
-        pca = PCA(n_components=0.95)
-        ss = StandardScaler()
-        train_X = transform_pc(train_X, pca, ss, train=True)
-        valid_X = transform_pc(valid_X, pca, ss)
-        test_X = transform_pc(test_X, pca, ss)
-        joblib.dump(pca, '{}/pca.joblib'.format(file_prefix))
-        joblib.dump(ss, '{}/ss.joblib'.format(file_prefix))
+    pca_model = PCA(n_components=0.95)
+    ss_model = StandardScaler()
+    train_X = transform_pc(train_X, pca_model, ss_model, training=True)
+    valid_X = transform_pc(valid_X, pca_model, ss_model)
+    test_X = transform_pc(test_X, pca_model, ss_model)
+    joblib.dump(pca_model, '{}/pca.joblib'.format(file_prefix))
+    joblib.dump(ss_model, '{}/ss.joblib'.format(file_prefix))
+
+    start_time = time.time()
 
     if model_type == 'CNNLSTM':
-        model = cnn_lstm.FullModel(learning_rate=learning_rate, num_hidden=num_hidden, leaky_relu_alpha=0.1,
-                                   output_size=3)
+        model = cnn_lstm.FullModel(learning_rate=learning_rate, num_hidden=num_hidden,
+                                   leaky_relu_alpha=0.1, output_size=3)
         model.train(train_data=(train_X, train_Y), class_weights=class_weight,
                     valid_data=(valid_X, valid_Y), num_epoch=n_epoch, batch_size=batch_size)
         print("Evaluating the model, acc:", model.evaluate(test_X, test_Y))
 
-    # Traditional RNN models
     else:
         train_data = tf.data.Dataset.from_tensor_slices((train_X, train_Y)).batch(batch_size=batch_size)
         valid_data = tf.data.Dataset.from_tensor_slices((valid_X, valid_Y)).batch(batch_size=batch_size)
@@ -100,15 +103,72 @@ def main():
         print("Evaluating the model")
         model.evaluate(test_data)
 
-    print("Total time: {0:.3f} seconds".format(time.time() - start_time))
+    print("Total training time: {0:.3f} seconds".format(time.time() - start_time))
+
+
+def parse_config(config):
+    return config[0], config[1], config[2], config[3]
+
+
+def gen_file_prefix(o_dir, model_type, mid_price_window, x_window, learning_rate):
+    return '{}/{}_midwin{}_xwin{}_rate{}'.format(o_dir, model_type, mid_price_window, x_window, learning_rate)
+
+
+def load_model(path):
+    pca_model = joblib.load(path + '/pca.joblib')
+    ss_model = joblib.load(path + '/ss.joblib')
+    trained_model = tf.keras.models.load_model(path)
+    return pca_model, ss_model, trained_model
 
 
 if __name__ == '__main__':
-    symbol = sys.argv[1]
-    model_type = sys.argv[2]
-    input_type = sys.argv[3]
-    mid_price_window = int(sys.argv[4])
-    x_window = int(sys.argv[5])
-    learning_rate = float(sys.argv[6])
-    use_pca = sys.argv[7]
-    main()
+    # mode: single, grid, test
+    mode = sys.argv[1]
+    if mode not in ['grid', 'single', 'test']:
+        sys.exit('Mode should be one of \'grid\', \'single\', \'test\'')
+
+    symbol = sys.argv[2]
+    raw_data_dir = './data/{}'.format(symbol)
+    out_dir = './logs/{}'.format(symbol)
+    os.makedirs(out_dir, exist_ok=True)
+
+    model_types = sys.argv[3].split(',')
+    mid_price_windows = sys.argv[4].split(',')
+    x_windows = sys.argv[5].split(',')
+    learning_rates = sys.argv[6].split(',')
+
+    if mode == 'grid':
+        data_set = load_data(raw_data_dir)
+        configs = np.array(np.meshgrid(model_types, mid_price_windows, x_windows, learning_rates)).T.reshape(-1, 4)
+        for cfg in configs:
+            mod_type, mid_win, x_win, learn_rate = parse_config(cfg)
+            f_prefix = gen_file_prefix(out_dir, mod_type, mid_win, x_win, learn_rate)
+            os.makedirs(f_prefix, exist_ok=True)
+            x_tensor, y_tensor = convert_data(data_set, x_win, mid_win)
+            train(x_tensor, y_tensor, mod_type, learn_rate, f_prefix)
+
+    else:
+        mod_type = model_types[0]
+        mid_win = int(mid_price_windows[0])
+        x_win = int(x_windows[0])
+        learn_rate = float(learning_rates[0])
+        f_prefix = gen_file_prefix(out_dir, mod_type, mid_win, x_win, learn_rate)
+
+        if mode == 'single':
+            data_set = load_data(raw_data_dir)
+            os.makedirs(f_prefix, exist_ok=True)
+            x_tensor, y_tensor = convert_data(data_set, x_win, mid_win)
+            train(x_tensor, y_tensor, mod_type, learn_rate, f_prefix)
+
+        elif mode == 'test':
+            test_date = sys.argv[7]
+            pca, ss, mod = load_model(f_prefix)
+            ob_file = './data/test_data/{}_ob_{}.csv'.format(symbol, test_date)
+            trx_file = './data/test_data/{}_trx_{}.csv'.format(symbol, test_date)
+            ob = pd.read_csv(ob_file)
+            trx = pd.read_csv(trx_file)
+            test_x = features.all_features(ob, trx, lag, include_ob=True)
+            test_x, test_y = ob_util.convert_to_dataset(test_x, window_size=x_win, mid_price_window=mid_win)
+            test_x = transform_pc(test_x, pca, ss)
+            test_input = tf.data.Dataset.from_tensor_slices((test_x, test_y)).batch(batch_size=batch_size)
+            mod.evaluate(test_input, verbose=2)
