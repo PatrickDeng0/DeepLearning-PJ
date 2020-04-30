@@ -33,14 +33,17 @@ def transform_pc(train_x, pca_model, scaler, training=False):
     return train_x
 
 
-def load_data(raw_data_directory):
+def load_data(raw_data_directory, gen_features=True):
     num_files = len([fn for fn in os.listdir(raw_data_directory) if '.csv' in fn]) / 2
 
     data_list = []
     for i in range(int(num_files)):
         order_book = pd.read_csv('{}/ob_{}.csv'.format(raw_data_directory, i))
-        transaction = pd.read_csv('{}/trx_{}.csv'.format(raw_data_directory, i))
-        data_list.append(features.all_features(order_book, transaction, lag, include_ob=True))
+        if gen_features:
+            transaction = pd.read_csv('{}/trx_{}.csv'.format(raw_data_directory, i))
+            data_list.append(features.all_features(order_book, transaction, lag, include_ob=True))
+        else:
+            data_list.append(order_book)
 
     return data_list
 
@@ -72,25 +75,29 @@ def train(X, Y, model_type, learning_rate, file_prefix):
     train_X, test_X, train_Y, test_Y = train_test_split(X, Y, test_size=0.1)
     train_X, valid_X, train_Y, valid_Y = train_test_split(train_X, train_Y, test_size=0.1)
 
-    pca_model = PCA(n_components=0.95)
-    ss_model = StandardScaler()
-    train_X = transform_pc(train_X, pca_model, ss_model, training=True)
-    valid_X = transform_pc(valid_X, pca_model, ss_model)
-    test_X = transform_pc(test_X, pca_model, ss_model)
-    joblib.dump(pca_model, '{}/pca.joblib'.format(file_prefix))
-    joblib.dump(ss_model, '{}/ss.joblib'.format(file_prefix))
-
     start_time = time.time()
 
     if model_type == 'CNNLSTM':
+        # only take the original order book columns
+        train_X = train_X[:, :, -20:]
+        test_X = test_X[:, :, -20:]
+        valid_X = valid_X[:, :, -20:]
+
         model = cnn_lstm.FullModel(learning_rate=learning_rate, num_hidden=num_hidden,
                                    leaky_relu_alpha=0.1, output_size=3)
         model.train(train_data=(train_X, train_Y), class_weights=class_weight,
                     valid_data=(valid_X, valid_Y), num_epoch=n_epoch, batch_size=batch_size)
         val_acc = model.evaluate(test_X, test_Y)
         print("Evaluating the model, acc:", val_acc)
-
     else:
+        pca_model = PCA(n_components=0.95)
+        ss_model = StandardScaler()
+        train_X = transform_pc(train_X, pca_model, ss_model, training=True)
+        valid_X = transform_pc(valid_X, pca_model, ss_model)
+        test_X = transform_pc(test_X, pca_model, ss_model)
+        joblib.dump(pca_model, '{}/pca.joblib'.format(file_prefix))
+        joblib.dump(ss_model, '{}/ss.joblib'.format(file_prefix))
+
         train_data = tf.data.Dataset.from_tensor_slices((train_X, train_Y)).batch(batch_size=batch_size)
         valid_data = tf.data.Dataset.from_tensor_slices((valid_X, valid_Y)).batch(batch_size=batch_size)
         test_data = tf.data.Dataset.from_tensor_slices((test_X, test_Y)).batch(batch_size=batch_size)
@@ -170,9 +177,12 @@ if __name__ == '__main__':
             ob_file = './data/test_data/{}_ob_{}.csv'.format(symbol, test_date)
             trx_file = './data/test_data/{}_trx_{}.csv'.format(symbol, test_date)
             ob = pd.read_csv(ob_file)
-            trx = pd.read_csv(trx_file)
-            test_x = features.all_features(ob, trx, lag, include_ob=True)
-            test_x, test_y = ob_util.convert_to_dataset(test_x, window_size=x_win, mid_price_window=mid_win)
-            test_x = transform_pc(test_x, pca, ss)
+            if mod_type == 'CNNLSTM':
+                test_x, test_y = ob_util.convert_to_dataset(ob, window_size=x_win, mid_price_window=mid_win)
+            else:
+                trx = pd.read_csv(trx_file)
+                test_x = features.all_features(ob, trx, lag, include_ob=True)
+                test_x, test_y = ob_util.convert_to_dataset(test_x, window_size=x_win, mid_price_window=mid_win)
+                test_x = transform_pc(test_x, pca, ss)
             test_input = tf.data.Dataset.from_tensor_slices((test_x, test_y)).batch(batch_size=batch_size)
             mod.evaluate(test_input, verbose=2)
