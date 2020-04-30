@@ -133,16 +133,20 @@ class FullModel:
 
     # train_data: tf.dataset object
     # valid_data: numpy object. For convenience in strategy
-    def train(self, train_data, valid_data=None, num_epoch=100, batch_size=128):
+    def train(self, train_data, class_weight, valid_data=None, num_epoch=100, batch_size=128):
         train_X, train_Y = train_data
         shuffled_X, shuffled_Y = shuffle(train_X, train_Y)
         start_time = time.time()
 
+        # Construct class weight
+        coe = tf.constant([class_weight[i] for i in range(3)], dtype='float32')
+
         for epoch in range(num_epoch):
             for batch_X, batch_Y in get_batch(shuffled_X, shuffled_Y, batch_size):
+                one_hot_batch_Y = tf.one_hot(batch_Y, depth=3)
                 with tf.GradientTape() as tape:
-                    loss = tf.nn.sparse_softmax_cross_entropy_with_logits(batch_Y, self.fwd(batch_X))
-                    loss = tf.reduce_mean(loss)
+                    Y_pred = self.fwd(batch_X)
+                    loss = -tf.reduce_mean(one_hot_batch_Y * coe * tf.math.log(Y_pred))
                 grads = tape.gradient(loss, self.get_vars())
                 self.optimizer.apply_gradients(zip(grads, self.get_vars()))
 
