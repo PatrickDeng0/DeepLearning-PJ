@@ -133,31 +133,37 @@ class FullModel:
 
     # train_data: tf.dataset object
     # valid_data: numpy object. For convenience in strategy
-    def train(self, train_data, class_weight, valid_data=None, num_epoch=100, batch_size=128):
+    def train(self, train_data, valid_data=None, num_epoch=100, batch_size=128, class_weights=None):
         train_X, train_Y = train_data
         shuffled_X, shuffled_Y = shuffle(train_X, train_Y)
+        val_acc_list = []
         start_time = time.time()
-
-        # Construct class weight
-        coe = tf.constant([class_weight[i] for i in range(3)], dtype='float32')
 
         for epoch in range(num_epoch):
             for batch_X, batch_Y in get_batch(shuffled_X, shuffled_Y, batch_size):
-                one_hot_batch_Y = tf.one_hot(batch_Y, depth=3)
                 with tf.GradientTape() as tape:
-                    Y_pred = self.fwd(batch_X)
-                    loss = -tf.reduce_mean(one_hot_batch_Y * coe * tf.math.log(Y_pred))
+                    loss = tf.nn.sparse_softmax_cross_entropy_with_logits(batch_Y, self.fwd(batch_X))
+                    if class_weights is not None:
+                        weights = np.array(list(map(lambda x: class_weights[x], batch_Y)))
+                        loss = tf.multiply(loss, weights)
+                    loss = tf.reduce_mean(loss)
                 grads = tape.gradient(loss, self.get_vars())
                 self.optimizer.apply_gradients(zip(grads, self.get_vars()))
 
             if valid_data is not None:
                 valid_X, valid_Y = valid_data
+                val_acc = self.evaluate(valid_X, valid_Y)
+                val_acc_list.append(val_acc)
                 print("Epoch {}: Train acc: {}, Validation acc: {}".
-                      format(epoch, self.evaluate(train_X, train_Y), self.evaluate(valid_X, valid_Y)))
+                      format(epoch, self.evaluate(train_X, train_Y), val_acc))
+                if len(val_acc_list) >= 6 and np.array(val_acc_list[-6:]).argmax() == 0:
+                    print("Early stopping")
+                    break
+
         print("Total time lapse: {0:.3f} seconds".format(time.time() - start_time))
 
 
 def get_batch(X, Y, batch_size):
     nums = X.shape[0]
     for i in range(nums // batch_size):
-        yield X[i*batch_size : (i+1)*batch_size], Y[i*batch_size : (i+1)*batch_size]
+        yield X[i * batch_size: (i + 1) * batch_size], Y[i * batch_size: (i + 1) * batch_size]

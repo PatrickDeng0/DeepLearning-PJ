@@ -93,7 +93,7 @@ def main():
     if model_type == 'CNNLSTM':
         model = cnn_lstm.FullModel(learning_rate=learning_rate, num_hidden=num_hidden, leaky_relu_alpha=0.1,
                                    output_size=3)
-        model.train(train_data=(train_X, train_Y), class_weight=class_weight,
+        model.train(train_data=(train_X, train_Y), class_weights=class_weight,
                     valid_data=(valid_X, valid_Y), num_epoch=n_epoch, batch_size=batch_size)
         print("Evaluating the model, acc:", model.evaluate(test_X, test_Y))
 
