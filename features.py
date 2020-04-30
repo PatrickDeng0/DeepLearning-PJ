@@ -276,7 +276,7 @@ def technical_indicators(mid_price):
     return pd.DataFrame(tech)
 
 
-def all_features(order_book_df, transaction_df, lag=50):
+def all_features(order_book_df, transaction_df, lag=50, include_ob=False):
     start_t = time.time()
     print("Start creating features from order books and transactions data")
     features = []
@@ -295,14 +295,26 @@ def all_features(order_book_df, transaction_df, lag=50):
     features.append(ask_bid_correlation(order_book_df, lag))
     features.append(technical_indicators(mid_price))
     print("Finished creating features, time lapse: {0:.3f} seconds".format(time.time() - start_t))
-    return pd.concat(features, axis=1)
+    f = pd.concat(features, axis=1)
+    if include_ob:
+        f = f[lag - 1:]
+        f.ffill(inplace=True)
+        f.bfill(inplace=True)
+        f.reset_index(drop=True, inplace=True)
+        x = pd.concat([
+            f,
+            transaction_df[lag - 1:].reset_index(drop=True),
+            order_book_df[lag - 1:].reset_index(drop=True)
+        ], axis=1)
+        return x
+    else:
+        return f
 
 
 if __name__ == "__main__":
-    order_book_filename = './data/order_book.csv'
-    transaction_filename = './data/transaction.csv'
+    order_book_filename = './data/INTC_order_book.csv'
+    transaction_filename = './data/INTC_transaction.csv'
     o = pd.read_csv(order_book_filename)
     t = pd.read_csv(transaction_filename)
-    lag = 50
-    f = all_features(o, t)
+    f = all_features(o, t, 50, include_ob=True)
     f.to_csv("./data/raw_features.csv")

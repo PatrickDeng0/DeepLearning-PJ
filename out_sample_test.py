@@ -33,24 +33,13 @@ def main():
     transaction = pd.read_csv(trx_file)
 
     if input_type in ['obf', 'obfn']:
-        f = features.all_features(order_book, transaction, lag)[lag - 1:]
-        f.ffill(inplace=True)
-        f.bfill(inplace=True)
-        f.reset_index(drop=True, inplace=True)
-        order_book = order_book[lag - 1:].reset_index(drop=True)
-        transaction = transaction[lag - 1:].reset_index(drop=True)
-        X = pd.concat([transaction, f, order_book], axis=1)
-        del f
-        del order_book
-        del transaction
+        X = features.all_features(order_book, transaction, lag, include_ob=True)
     else:
         X = pd.concat([transaction, order_book], axis=1)
-        del order_book
-        del transaction
 
     X, Y = ob_util.convert_to_dataset(X, window_size=x_window, mid_price_window=mid_price_window)
     if input_type in ['obfn', 'obn']:
-        X[:, :, -20:] = ob_util.OBnormal(X[:, :, -20:])
+        X[:, :, -20:] = ob_util.normalize_ob(X[:, :, -20:])
 
     if use_pca == 'pca':
         X = train.transform_pc(X, pca, ss)

@@ -222,7 +222,8 @@ def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transacti
             handle_quote(quote_index)
             quote_index += 1
 
-    pd.DataFrame(transactions).to_csv(out_transaction_filename, header=['tx_price', 'tx_size', 'tx_direction'], index=False)
+    pd.DataFrame(transactions).to_csv(out_transaction_filename, header=['tx_price', 'tx_size', 'tx_direction'],
+                                      index=False)
 
     print('Finished pre-processing data, {0:.3f} seconds'.format((dt.datetime.now() - start_time).total_seconds()))
 
@@ -275,7 +276,7 @@ def over_sample(X, Y):
     return X_bar, Y_bar
 
 
-def OBnormal(data_X):
+def normalize_ob(data_X):
     X_normal = data_X.copy()
 
     # Price normalize
@@ -286,6 +287,7 @@ def OBnormal(data_X):
     size_normal = X_normal[:, :, 1][:, :, np.newaxis]
     X_normal[:, :, 1::2] = X_normal[:, :, 1::2] / size_normal
     return X_normal
+
 
 def generate_test_dataset(data_df, window_size=10, mid_price_window=5):
     '''
@@ -298,16 +300,18 @@ def generate_test_dataset(data_df, window_size=10, mid_price_window=5):
     y_time_index: the time stamp to take action
     '''
     test_images = []
-    for i in range(len(data_df)-window_size-mid_price_window):
-        test_images.append(convert_to_dataset(data_df[i:i+window_size+mid_price_window], window_size, mid_price_window)[0])
-    y_time_index = np.arange(window_size, len(data_df)-mid_price_window)
+    for i in range(len(data_df) - window_size - mid_price_window):
+        test_images.append(
+            convert_to_dataset(data_df[i:i + window_size + mid_price_window], window_size, mid_price_window)[0])
+    y_time_index = np.arange(window_size, len(data_df) - mid_price_window)
     test_X = np.concatenate(test_images)
     return test_X, y_time_index
+
 
 if __name__ == '__main__':
     # testing
     data_dir = './data/'
-    #preprocess_data(data_dir + 'INTC_quote_20120621.csv', data_dir + 'INTC_trade_20120621.csv',
+    # preprocess_data(data_dir + 'INTC_quote_20120621.csv', data_dir + 'INTC_trade_20120621.csv',
     #                data_dir + 'order_book.csv', data_dir + 'transaction.csv')
     preprocess_data(data_dir + 'quote_intc_110816.csv', data_dir + 'trade_intc_110816.csv',
                     data_dir + 'order_book.csv', data_dir + 'transaction.csv')

@@ -22,7 +22,6 @@ def transform_pc(train_x, pca_model, scaler, train=False):
 
 def main():
     num_hidden = 64
-
     n_epoch = 150
     batch_size = 256
     lag = 50
@@ -42,20 +41,9 @@ def main():
         transaction = pd.read_csv('{}/trx_{}.csv'.format(raw_data_dir, i))
 
         if input_type in ['obf', 'obfn']:
-            f = features.all_features(order_book, transaction, lag)[lag - 1:]
-            f.ffill(inplace=True)
-            f.bfill(inplace=True)
-            f.reset_index(drop=True, inplace=True)
-            order_book = order_book[lag - 1:].reset_index(drop=True)
-            transaction = transaction[lag - 1:].reset_index(drop=True)
-            x = pd.concat([transaction, f, order_book], axis=1)
-            del f
-            del order_book
-            del transaction
+            x = features.all_features(order_book, transaction, lag, include_ob=True)
         else:
             x = pd.concat([transaction, order_book], axis=1)
-            del order_book
-            del transaction
 
         x, y = ob_util.convert_to_dataset(x, window_size=x_window, mid_price_window=mid_price_window)
         if X is None or Y is None:
@@ -65,7 +53,7 @@ def main():
             Y = np.concatenate([Y, y])
 
     if input_type in ['obfn', 'obn']:
-        X[:, :, -20:] = ob_util.OBnormal(X[:, :, -20:])
+        X[:, :, -20:] = ob_util.normalize_ob(X[:, :, -20:])
 
     # Instead of Oversample, we use different loss weight to balance the loss function
     # X, Y = ob_util.over_sample(X, Y)

@@ -5,6 +5,7 @@ import copy
 import features
 import ob_util as ob
 
+
 class SimpleStrategy:
     def __init__(self, bid_price, ask_price, pred):
         """
@@ -22,13 +23,13 @@ class SimpleStrategy:
         self.method = 1
         self.money = np.zeros_like(self.ask_price)
         self.ret_strat = np.zeros_like(self.ask_price)
-        
+
         # preprocess for price==0
-        ask_price[ask_price==0] = np.nan
-        bid_price[bid_price==0] = np.nan
+        ask_price[ask_price == 0] = np.nan
+        bid_price[bid_price == 0] = np.nan
         refined_ask_price = pd.Series(ask_price).ffill()
         refined_bid_price = pd.Series(bid_price).ffill()
-        self.mid_price = (0.5*(refined_ask_price+refined_bid_price)).values
+        self.mid_price = (0.5 * (refined_ask_price + refined_bid_price)).values
 
     def get_ret(self, cost_rate=0.0001, method=1, cash0=100000):
         """
@@ -41,7 +42,6 @@ class SimpleStrategy:
         self.cost_rate = cost_rate
         self.method = method
         self.money += self.cash0
-        
 
         # calculate the first buying time
         ini_buy = self.pred.argmax()
@@ -62,7 +62,7 @@ class SimpleStrategy:
                 else:
                     self.position[i] = self.position[i - 1] + 1  # buy one
                     self.money[i] = self.money[i - 1] - self.bid_price[i] * (1 + self.cost_rate)
-                self.wealth[i] = self.money[i] + self.position[i]*self.bid_price[i]
+                self.wealth[i] = self.money[i] + self.position[i] * self.bid_price[i]
 
             # sell
             elif (self.pred[i] == -1) and (self.position[i - 1] >= 0) and (self.ask_price[i] > 0):
@@ -72,17 +72,17 @@ class SimpleStrategy:
                 else:
                     self.position[i] = self.position[i - 1] - 1
                     self.money[i] = self.money[i - 1] + self.ask_price[i] * (1 - self.cost_rate)
-                self.wealth[i] = self.money[i] + self.position[i]*self.ask_price[i]
-                
+                self.wealth[i] = self.money[i] + self.position[i] * self.ask_price[i]
+
 
             # no action
             else:
                 self.money[i] = self.money[i - 1]
                 self.position[i] = self.position[i - 1]
-                self.wealth[i] = self.money[i] + self.position[i]*self.mid_price[i]
-        
+                self.wealth[i] = self.money[i] + self.position[i] * self.mid_price[i]
+
             self.ret_strat[i] = self.wealth[i] / self.cash0 - 1
-                
+
         return self.ret_strat[ini_buy:]
 
     def get_position(self):
@@ -114,9 +114,9 @@ def plot(d):
     plt.plot(ret_stra.get_ret(cost_rate=.001)[:5000], label='Transaction cost = 0.1%')
     plt.grid()
     plt.legend()
-    
+
     ret_stra.flush()
-    
+
     fig = plt.figure(figsize=(15, 10))
     plt.plot(ret_stra.get_ret(cost_rate=0, method=2)[:5000], label='No transaction cost')
     ret_stra.flush()
@@ -129,28 +129,17 @@ def plot(d):
     plt.legend()
     plt.show()
 
-def strategy_performance(model, order_book_df, transaction_df, window_size=10, mid_price_window=5, lag=50):
-    f = features.all_features(order_book_df, transaction_df, lag)[lag - 1:].ffill().bfill().reset_index(drop=True) #iloc is to remove bid_size1, ask_size1 from the generated features to accomodate the model used in RNNModel_tf2's main()
 
+def strategy_performance(model, order_book_df, transaction_df, window_size=10, mid_price_window=5, lag=50):
+    X = features.all_features(order_book_df, transaction_df, lag, include_ob=True)
     test_df = order_book_df[lag - 1:]
 
-    o = test_df.to_numpy()
-    t = transaction_df[lag - 1:].to_numpy()
-    X = np.concatenate((t, f, o), axis=1)
-    X = pd.DataFrame(X)
-
     test_X, action_time = ob.generate_test_dataset(X, window_size, mid_price_window)
-    test_X[:, :, -20:] = ob.OBnormal(test_X[:, :, -20:])
+    test_X[:, :, -20:] = ob.normalize_ob(test_X[:, :, -20:])
     test_X = np.nan_to_num(test_X)
     pred = np.ones(len(test_df))
     pred[action_time] = model.predict(test_X).argmax(1)
     d = pd.DataFrame(
-        {"bid_px1": test_df["bid_px1"], "ask_px1": test_df["ask_px1"], "pred": pred-1}
+        {"bid_px1": test_df["bid_px1"], "ask_px1": test_df["ask_px1"], "pred": pred - 1}
     )
     return d
-
-
-    
-    
-
-
