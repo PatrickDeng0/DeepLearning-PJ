@@ -146,7 +146,7 @@ if __name__ == '__main__':
     learning_rates = sys.argv[6].split(',')
 
     if mode == 'train_grid':
-        data_set = load_data(raw_data_dir)
+        data_set = load_data(raw_data_dir, (np.array(model_types) != 'CNNLSTM').any())
         configs = np.array(np.meshgrid(model_types, mid_price_windows, x_windows, learning_rates)).T.reshape(-1, 4)
         train_result = {}
         for cfg in configs:
@@ -166,7 +166,7 @@ if __name__ == '__main__':
         f_prefix = gen_file_prefix(out_dir, mod_type, mid_win, x_win, learn_rate)
 
         if mode == 'train_single':
-            data_set = load_data(raw_data_dir)
+            data_set = load_data(raw_data_dir, mod_type != 'CNNLSTM')
             os.makedirs(f_prefix, exist_ok=True)
             x_tensor, y_tensor = convert_data(data_set, x_win, mid_win)
             train(x_tensor, y_tensor, mod_type, learn_rate, f_prefix)
