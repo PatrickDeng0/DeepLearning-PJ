@@ -108,7 +108,7 @@ def train(X, Y, model_type, learning_rate, file_prefix):
 
 
 def parse_config(config):
-    return config[0], config[1], config[2], config[3]
+    return config[0], int(config[1]), int(config[2]), float(config[3])
 
 
 def gen_file_prefix(o_dir, model_type, mid_price_window, x_window, learning_rate):
