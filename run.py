@@ -87,7 +87,8 @@ def train(X, Y, model_type, learning_rate, file_prefix):
                                    leaky_relu_alpha=0.1, output_size=3)
         model.train(train_data=(train_X, train_Y), class_weights=class_weight,
                     valid_data=(valid_X, valid_Y), num_epoch=n_epoch, batch_size=batch_size)
-        print("Evaluating the model, acc:", model.evaluate(test_X, test_Y))
+        val_acc = model.evaluate(test_X, test_Y)
+        print("Evaluating the model, acc:", val_acc)
 
     else:
         train_data = tf.data.Dataset.from_tensor_slices((train_X, train_Y)).batch(batch_size=batch_size)
@@ -100,10 +101,10 @@ def train(X, Y, model_type, learning_rate, file_prefix):
                                    log_files_path=file_prefix)
         model.train(train_data, valid_data, n_epoch=n_epoch, class_weight=class_weight)
 
-        print("Evaluating the model")
-        model.evaluate(test_data)
+        val_acc = model.evaluate(test_data)[1]
 
     print("Total training time: {0:.3f} seconds".format(time.time() - start_time))
+    return val_acc
 
 
 def parse_config(config):
@@ -124,8 +125,8 @@ def load_model(path):
 if __name__ == '__main__':
     # mode: single, grid, test
     mode = sys.argv[1]
-    if mode not in ['grid', 'single', 'test']:
-        sys.exit('Mode should be one of \'grid\', \'single\', \'test\'')
+    if mode not in ['train_grid', 'train_single', 'test']:
+        sys.exit('Mode should be one of \'train_grid\', \'train_single\', \'test\'')
 
     symbol = sys.argv[2]
     raw_data_dir = './data/{}'.format(symbol)
@@ -137,15 +138,18 @@ if __name__ == '__main__':
     x_windows = sys.argv[5].split(',')
     learning_rates = sys.argv[6].split(',')
 
-    if mode == 'grid':
+    if mode == 'train_grid':
         data_set = load_data(raw_data_dir)
         configs = np.array(np.meshgrid(model_types, mid_price_windows, x_windows, learning_rates)).T.reshape(-1, 4)
+        train_result = {}
         for cfg in configs:
             mod_type, mid_win, x_win, learn_rate = parse_config(cfg)
             f_prefix = gen_file_prefix(out_dir, mod_type, mid_win, x_win, learn_rate)
             os.makedirs(f_prefix, exist_ok=True)
             x_tensor, y_tensor = convert_data(data_set, x_win, mid_win)
-            train(x_tensor, y_tensor, mod_type, learn_rate, f_prefix)
+            train_result[tuple(cfg)] = train(x_tensor, y_tensor, mod_type, learn_rate, f_prefix)
+        best_acc, best_cfg = max([(val_acc, cfg) for cfg, val_acc in train_result.items()])
+        print("The best training result is {0:.4f}, the config is {1}".format(best_acc, best_cfg))
 
     else:
         mod_type = model_types[0]
@@ -154,7 +158,7 @@ if __name__ == '__main__':
         learn_rate = float(learning_rates[0])
         f_prefix = gen_file_prefix(out_dir, mod_type, mid_win, x_win, learn_rate)
 
-        if mode == 'single':
+        if mode == 'train_single':
             data_set = load_data(raw_data_dir)
             os.makedirs(f_prefix, exist_ok=True)
             x_tensor, y_tensor = convert_data(data_set, x_win, mid_win)
