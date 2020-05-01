@@ -150,12 +150,16 @@ if __name__ == '__main__':
         configs = np.array(np.meshgrid(model_types, mid_price_windows, x_windows, learning_rates)).T.reshape(-1, 4)
         train_result = {}
         for cfg in configs:
+            print('\n\nTraining with config:', cfg)
             mod_type, mid_win, x_win, learn_rate = parse_config(cfg)
             f_prefix = gen_file_prefix(out_dir, mod_type, mid_win, x_win, learn_rate)
             os.makedirs(f_prefix, exist_ok=True)
             x_tensor, y_tensor = convert_data(data_set, x_win, mid_win)
             train_result[tuple(cfg)] = train(x_tensor, y_tensor, mod_type, learn_rate, f_prefix)
         best_acc, best_cfg = max([(val_acc, cfg) for cfg, val_acc in train_result.items()])
+        print('\n\nResults of all config:')
+        for key, value in train_result.items():
+            print(key, value)
         print("The best training result is {0:.4f}, the config is {1}".format(best_acc, best_cfg))
 
     else:
