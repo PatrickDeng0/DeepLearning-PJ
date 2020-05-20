@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import copy
 import features
-import ob_util as ob
+import ob_util
+from run import load_model, transform_pc
 
 
 class SimpleStrategy:
@@ -130,16 +131,24 @@ def plot(d):
     plt.show()
 
 
-def strategy_performance(model, order_book_df, transaction_df, window_size=10, mid_price_window=5, lag=50):
-    X = features.all_features(order_book_df, transaction_df, lag, include_ob=True)
-    test_df = order_book_df[lag - 1:]
+if __name__ == "__main__":
+    lag = 50
+    test_date = 20190604
+    symbol = 'AMD'
+    midwin = 15
+    xwin = 50
 
-    test_X, action_time = ob.generate_test_dataset(X, window_size, mid_price_window)
-    test_X[:, :, -20:] = ob.normalize_ob(test_X[:, :, -20:])
-    test_X = np.nan_to_num(test_X)
-    pred = np.ones(len(test_df))
-    pred[action_time] = model.predict(test_X).argmax(1)
-    d = pd.DataFrame(
-        {"bid_px1": test_df["bid_px1"], "ask_px1": test_df["ask_px1"], "pred": pred - 1}
-    )
-    return d
+    f_prefix = 'logs/{}/LSTMs_midwin{}_xwin{}_rate0.0001'.format(symbol, midwin, xwin)
+    ob_file = './data/test_data/{}_ob_{}.csv'.format(symbol, test_date)
+    trx_file = './data/test_data/{}_trx_{}.csv'.format(symbol, test_date)
+    ob = pd.read_csv(ob_file)
+    trx = pd.read_csv(trx_file)
+
+    data = features.all_features(ob, trx, lag, include_ob=True)
+    a, b, c = ob_util.generate_test_dataset(data, xwin, midwin)
+
+    pca, ss, mod = load_model(f_prefix)
+    test_x = transform_pc(a, pca, ss)
+    pred = mod.predict(test_x).argmax(1)
+
+    plot(pd.DataFrame({"bid_px1": b, "ask_px1": c, "pred": pred - 1}))

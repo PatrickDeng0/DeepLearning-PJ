@@ -297,6 +297,7 @@ def all_features(order_book_df, transaction_df, lag=50, include_ob=False):
     print("Finished creating features, time lapse: {0:.3f} seconds".format(time.time() - start_t))
     f = pd.concat(features, axis=1)
     if include_ob:
+        del features[0]
         f = f[lag - 1:]
         f.ffill(inplace=True)
         f.bfill(inplace=True)

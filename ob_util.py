@@ -234,10 +234,9 @@ def preprocess_data(quote_dir, trade_dir, out_order_book_filename, out_transacti
 # What is training dataset?
 # Now we divide the dataset into separate epochs where length of epochs is the window size +1
 # Window size as data input, the last line as for judge the movement of mid price
-def convert_to_dataset(data_df, window_size=10, mid_price_window=5):
-    data = data_df.values
-    num_epochs = data.shape[0] // (window_size + mid_price_window)
-    epochs_data = data[:num_epochs * (window_size + mid_price_window)]
+def convert_to_dataset(data_raw, window_size=10, mid_price_window=5):
+    num_epochs = data_raw.shape[0] // (window_size + mid_price_window)
+    epochs_data = data_raw[:num_epochs * (window_size + mid_price_window)]
     epochs_data = epochs_data.reshape(num_epochs, window_size + mid_price_window, epochs_data.shape[1])
 
     # Now epochs_data[:,:,-1] represents the mid_price of each time
@@ -290,29 +289,22 @@ def normalize_ob(data_X):
 
 
 def generate_test_dataset(data_df, window_size=10, mid_price_window=5):
-    '''
-    :param ob_file_path: the order_book do not have column "mid", so we first will manually add the "mid" column
-    :param window_size: same with ob.convert_to_dataset
-    :param mid_price_window: same with ob.convert_to_dataset
-
-    :return:
-    test_X: image
-    y_time_index: the time stamp to take action
-    '''
+    asks = data_df['ask_px1'].values
+    bids = data_df['bid_px1'].values
+    data_raw = data_df.values
     test_images = []
-    for i in range(len(data_df) - window_size - mid_price_window):
-        test_images.append(
-            convert_to_dataset(data_df[i:i + window_size + mid_price_window], window_size, mid_price_window)[0])
-    y_time_index = np.arange(window_size, len(data_df) - mid_price_window)
-    test_X = np.concatenate(test_images)
-    return test_X, y_time_index
+    test_bids = []
+    test_asks = []
+    for i in range(len(data_raw) - window_size - mid_price_window):
+        x = convert_to_dataset(data_raw[i:i + window_size + mid_price_window], window_size, mid_price_window)[0][0]
+        test_images.append(x)
+        test_bids.append(bids[i + window_size + mid_price_window - 1])
+        test_asks.append(asks[i + window_size + mid_price_window - 1])
+
+    return np.array(test_images), np.array(test_bids), np.array(test_asks)
 
 
 if __name__ == '__main__':
-    # testing
     data_dir = './data/'
-    # preprocess_data(data_dir + 'INTC_quote_20120621.csv', data_dir + 'INTC_trade_20120621.csv',
-    #                data_dir + 'order_book.csv', data_dir + 'transaction.csv')
     preprocess_data(data_dir + 'quote_intc_110816.csv', data_dir + 'trade_intc_110816.csv',
                     data_dir + 'order_book.csv', data_dir + 'transaction.csv')
-    # X, Y = convert_to_dataset(data_dir + 'orderbook.csv', window_size=10, mid_price_window=5)

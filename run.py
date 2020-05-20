@@ -51,7 +51,7 @@ def load_data(raw_data_directory, gen_features=True):
 def convert_data(data_list, x_window, mid_price_window):
     X, Y = None, None
     for data in data_list:
-        x, y = ob_util.convert_to_dataset(data, window_size=x_window, mid_price_window=mid_price_window)
+        x, y = ob_util.convert_to_dataset(data.values, window_size=x_window, mid_price_window=mid_price_window)
         if X is None or Y is None:
             X, Y = x, y
         else:
@@ -182,11 +182,11 @@ if __name__ == '__main__':
             trx_file = './data/test_data/{}_trx_{}.csv'.format(symbol, test_date)
             ob = pd.read_csv(ob_file)
             if mod_type == 'CNNLSTM':
-                test_x, test_y = ob_util.convert_to_dataset(ob, window_size=x_win, mid_price_window=mid_win)
+                test_x, test_y = ob_util.convert_to_dataset(ob.values, window_size=x_win, mid_price_window=mid_win)
             else:
                 trx = pd.read_csv(trx_file)
                 test_x = features.all_features(ob, trx, lag, include_ob=True)
-                test_x, test_y = ob_util.convert_to_dataset(test_x, window_size=x_win, mid_price_window=mid_win)
+                test_x, test_y = ob_util.convert_to_dataset(test_x.values, window_size=x_win, mid_price_window=mid_win)
                 test_x = transform_pc(test_x, pca, ss)
             test_input = tf.data.Dataset.from_tensor_slices((test_x, test_y)).batch(batch_size=batch_size)
             mod.evaluate(test_input, verbose=2)
